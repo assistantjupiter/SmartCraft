@@ -3,7 +3,7 @@
 -- Fully native, no external dependencies.
 
 SmartCraft = SmartCraft or {}
-SmartCraft.version = "0.3.6"
+SmartCraft.version = "0.3.7"
 
 SmartCraft.defaults = {
     includeBank = true,
@@ -35,6 +35,9 @@ function SmartCraft:OnAddonLoaded(name)
     for k, v in pairs(self.defaults) do
         if SmartCraftDB[k] == nil then SmartCraftDB[k] = v end
     end
+
+    -- Init minimap button
+    SmartCraft.MinimapButton:Init()
 
     print("|cff00ff96SmartCraft|r v" .. self.version .. " loaded.")
     print("  |cffaaaaaa/sc|r          open panel      |cffaaaaaa/sc bank|r    toggle bank")
