@@ -2,7 +2,7 @@
 ## Title: SmartCraft
 ## Notes: Inventory-aware profession leveling optimizer. Reserves mats for higher-skill recipes first.
 ## Author: SmartCraft Team
-## Version: 0.5.5
+## Version: 0.5.6
 ## DefaultState: enabled
 ## SavedVariables: SmartCraftDB
 
@@ -17,6 +17,7 @@ Core\ShoppingList.lua
 Core\Planner.lua
 Core\PriceDB.lua
 Core\TrainerDB.lua
+Core\CharacterDB.lua
 Core\Optimizer.lua
 Core\Suggestion.lua
 
@@ -25,6 +26,7 @@ UI\MainFrame.lua
 UI\MinimapButton.lua
 UI\VendorFrame.lua
 UI\AuctionFrame.lua
+UI\AltsFrame.lua
 
 ## Init
 SmartCraft.lua

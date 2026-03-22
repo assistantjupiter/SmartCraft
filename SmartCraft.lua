@@ -3,7 +3,7 @@
 -- Fully native, no external dependencies.
 
 SmartCraft = SmartCraft or {}
-SmartCraft.version = "0.5.5"
+SmartCraft.version = "0.5.6"
 
 SmartCraft.defaults = {
     includeBank = true,
@@ -215,6 +215,7 @@ function SmartCraft:RunAnalysis()
     EL:Wrap("Reservation:Run",     function() self.Reservation:Run() end)
     EL:Wrap("ShoppingList:Build",  function() self.ShoppingList:Build() end)
     EL:Wrap("Optimizer:Run",       function() self.Optimizer:Run() end)
+    EL:Wrap("CharacterDB:Save",    function() self.CharacterDB:SaveCurrent() end)
     if self.Planner.targetSkill and self.Planner.targetSkill > 0 then
         EL:Wrap("Planner:BuildPlan", function()
             self.Planner:BuildPlan(self.Planner.targetSkill)

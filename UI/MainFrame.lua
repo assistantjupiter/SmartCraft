@@ -129,12 +129,13 @@ function UI:Init()
         { key="shopping", label="Shopping" },
         { key="planner",  label="Planner"  },
         { key="optimize", label="Optimize" },
+        { key="alts",     label="Alts"     },
         { key="help",     label="Guide"    },
     }
     local tx = 14
     for _, def in ipairs(tabDefs) do
         local tbtn = CreateFrame("Button", "SCTab_"..def.key, frame)
-        tbtn:SetSize(68, UC.TAB_H)
+        tbtn:SetSize(60, UC.TAB_H)
         tbtn:SetPoint("TOPLEFT", frame, "TOPLEFT", tx, -(UC.HEADER_H + 2))
 
         -- tab background
@@ -173,7 +174,7 @@ function UI:Init()
         end)
 
         tabs[def.key] = tbtn
-        tx = tx + 72
+        tx = tx + 63
     end
 
     -- ── Divider below tabs ────────────────────────────────────────
@@ -311,6 +312,7 @@ function UI:RebuildContent()
     elseif activeTab == "shopping" then lines = self:BuildShoppingLines()
     elseif activeTab == "planner"  then lines = self:BuildPlannerLines()
     elseif activeTab == "optimize" then lines = self:BuildOptimizeLines()
+    elseif activeTab == "alts"     then lines = SmartCraft.AltsUI:GetLines()
     elseif activeTab == "help"     then lines = self:BuildHelpLines()
     end
 
