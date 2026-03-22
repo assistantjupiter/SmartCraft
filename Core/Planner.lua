@@ -121,6 +121,39 @@ function PL:BuildPlan(targetSkill)
         })
     end
     table.sort(self.buyList, function(a, b) return a.toBuy > b.toBuy end)
+
+    -- Collapse consecutive same-recipe steps into single entries
+    self.plan = self:CollapsePlan(self.plan)
+end
+
+-- Merge consecutive steps with the same recipe name into one
+function PL:CollapsePlan(plan)
+    local collapsed = {}
+    for _, step in ipairs(plan) do
+        local last = collapsed[#collapsed]
+        if last
+            and not step.isTrainerStep
+            and not (last.isTrainerStep)
+            and last.recipe.name == step.recipe.name
+        then
+            -- Merge into previous entry
+            last.craftsNeeded = last.craftsNeeded + step.craftsNeeded
+            last.toSkill      = step.toSkill
+            for id, count in pairs(step.matsUsed or {}) do
+                last.matsUsed[id] = (last.matsUsed[id] or 0) + count
+            end
+        else
+            -- Clone step so we don't mutate the original
+            local s = {}
+            for k, v in pairs(step) do s[k] = v end
+            s.matsUsed = {}
+            for id, count in pairs(step.matsUsed or {}) do
+                s.matsUsed[id] = count
+            end
+            table.insert(collapsed, s)
+        end
+    end
+    return collapsed
 end
 
 -- ----------------------------------------------------------------
@@ -262,9 +295,9 @@ function PL:GetPlanLines()
         else
             local c = C[step.recipe.difficulty] or C.TRIVIAL
             local text = string.format(
-                "  %d→%d  |cffffd700[%dx]|r %s",
-                step.fromSkill, step.toSkill,
-                step.craftsNeeded, step.recipe.name
+                "  %s  |cffaaaaaa×%d|r  |cff888888(%d→%d)|r",
+                step.recipe.name, step.craftsNeeded,
+                step.fromSkill, step.toSkill
             )
             table.insert(lines, { text=text, r=c.r, g=c.g, b=c.b })
         end
