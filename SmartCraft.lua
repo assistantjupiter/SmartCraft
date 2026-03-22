@@ -3,7 +3,7 @@
 -- Fully native, no external dependencies.
 
 SmartCraft = SmartCraft or {}
-SmartCraft.version = "0.4.7"
+SmartCraft.version = "0.4.8"
 
 SmartCraft.defaults = {
     includeBank = true,
@@ -80,12 +80,15 @@ function SmartCraft:OnAddonLoaded(name)
 end
 
 function SmartCraft:OnTradeSkillShow()
-    -- Delay slightly: WoW populates trade skill data a frame after TRADE_SKILL_SHOW
-    local elapsed = 0
+    -- Poll until GetTradeSkillLine() returns real skill data (not 0/0).
+    -- In Anniversary the frame populates asynchronously after TRADE_SKILL_SHOW.
+    local attempts = 0
     local ticker = CreateFrame("Frame")
     ticker:SetScript("OnUpdate", function(self, dt)
-        elapsed = elapsed + dt
-        if elapsed >= 0.2 then
+        attempts = attempts + 1
+        local _, _, _, skillLevel, maxSkill = GetTradeSkillLine()
+        -- Wait until we have real data OR we've waited long enough (~2s)
+        if (skillLevel and skillLevel > 0) or attempts > 40 then
             self:SetScript("OnUpdate", nil)
             SmartCraft:RunAnalysis()
             SmartCraft.UI:Show()
@@ -98,8 +101,18 @@ function SmartCraft:OnTradeSkillClose()
 end
 
 function SmartCraft:OnTradeSkillUpdate()
-    self:RunAnalysis()
-    self.UI:Refresh()
+    -- Brief poll to let WoW finish updating skill data before we read it
+    local attempts = 0
+    local ticker = CreateFrame("Frame")
+    ticker:SetScript("OnUpdate", function(self, dt)
+        attempts = attempts + 1
+        local _, _, _, skillLevel, maxSkill = GetTradeSkillLine()
+        if (skillLevel and skillLevel > 0) or attempts > 20 then
+            self:SetScript("OnUpdate", nil)
+            SmartCraft:RunAnalysis()
+            SmartCraft.UI:Refresh()
+        end
+    end)
 end
 
 function SmartCraft:OnMerchantShow()
@@ -146,8 +159,24 @@ function SmartCraft:ToggleUI()
         if self.UI:IsShown() then
             self.UI:Hide()
         else
-            self:RunAnalysis()
-            self.UI:Show()
+            -- If trade skill window is open, retry until skill data is ready
+            local _, _, _, skillLevel = GetTradeSkillLine()
+            if TradeSkillFrame and TradeSkillFrame:IsShown() and not (skillLevel and skillLevel > 0) then
+                local attempts = 0
+                local ticker = CreateFrame("Frame")
+                ticker:SetScript("OnUpdate", function(self, dt)
+                    attempts = attempts + 1
+                    local _, _, _, sl = GetTradeSkillLine()
+                    if (sl and sl > 0) or attempts > 20 then
+                        self:SetScript("OnUpdate", nil)
+                        SmartCraft:RunAnalysis()
+                        SmartCraft.UI:Show()
+                    end
+                end)
+            else
+                self:RunAnalysis()
+                self.UI:Show()
+            end
         end
     end)
     if not ok then
