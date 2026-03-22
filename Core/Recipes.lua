@@ -10,13 +10,42 @@ R.skillName  = ""
 R.skillLevel = 0
 R.maxSkill   = 0
 
+-- GetTradeSkillLine() in vanilla Classic 1.x only returns the skill name.
+-- Skill level must be fetched via GetProfessions() + GetProfessionInfo().
+function R:FetchSkillLevel(skillName)
+    if not GetProfessions then return 0, 0 end
+    -- GetProfessions() returns up to 6 slot indices (prof1, prof2, archaeology, fishing, cooking, firstaid)
+    local slots = { GetProfessions() }
+    for _, slot in ipairs(slots) do
+        if slot then
+            local name, _, rank, maxRank = GetProfessionInfo(slot)
+            if name and name:lower() == (skillName or ""):lower() then
+                return rank or 0, maxRank or 0
+            end
+        end
+    end
+    -- Fallback: try to find any partial match
+    for _, slot in ipairs(slots) do
+        if slot then
+            local name, _, rank, maxRank = GetProfessionInfo(slot)
+            if name and skillName and name:find(skillName) then
+                return rank or 0, maxRank or 0
+            end
+        end
+    end
+    return 0, 0
+end
+
 function R:Scan()
     self.list = {}
 
-    local skillName, _, _, skillLevel, maxSkill = GetTradeSkillLine()
-    self.skillName  = skillName  or "Unknown"
-    self.skillLevel = skillLevel or 0
-    self.maxSkill   = maxSkill   or 0
+    local skillName = GetTradeSkillLine()
+    self.skillName = skillName or "Unknown"
+
+    -- Fetch real skill level via GetProfessions/GetProfessionInfo
+    local skillLevel, maxSkill = self:FetchSkillLevel(skillName)
+    self.skillLevel = skillLevel
+    self.maxSkill   = maxSkill
 
     local num = GetNumTradeSkills()
     if not num or num == 0 then return end
