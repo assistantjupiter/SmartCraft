@@ -3,7 +3,7 @@
 -- Fully native, no external dependencies.
 
 SmartCraft = SmartCraft or {}
-SmartCraft.version = "0.4.0"
+SmartCraft.version = "0.4.1"
 
 SmartCraft.defaults = {
     includeBank = true,
@@ -76,8 +76,17 @@ function SmartCraft:OnAddonLoaded(name)
 end
 
 function SmartCraft:OnTradeSkillShow()
-    self:RunAnalysis()
-    self.UI:Show()
+    -- Delay slightly: WoW populates trade skill data a frame after TRADE_SKILL_SHOW
+    local elapsed = 0
+    local ticker = CreateFrame("Frame")
+    ticker:SetScript("OnUpdate", function(self, dt)
+        elapsed = elapsed + dt
+        if elapsed >= 0.2 then
+            self:SetScript("OnUpdate", nil)
+            SmartCraft:RunAnalysis()
+            SmartCraft.UI:Show()
+        end
+    end)
 end
 
 function SmartCraft:OnTradeSkillClose()

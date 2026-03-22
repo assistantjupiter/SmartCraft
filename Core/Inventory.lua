@@ -109,8 +109,11 @@ function Inv:BankCacheStatus()
     local cache = SmartCraftDB and SmartCraftDB.bankCache or {}
     local n = self:CountKeys(cache)
     if n == 0 then
-        return "|cffff9900Bank: not scanned — visit bank to cache|r"
+        return "|cffff9900Bank: visit to scan|r"
     end
-    local state = (SmartCraftDB and SmartCraftDB.includeBank) and "|cff00ff96ON|r" or "|cffff4444OFF|r"
-    return string.format("|cffaaaaaa Bank %s (%d types)|r", state, n)
+    if SmartCraftDB and SmartCraftDB.includeBank then
+        return string.format("|cff00ff96Bank: ON (%d)|r", n)
+    else
+        return string.format("|cffff4444Bank: OFF (%d)|r", n)
+    end
 end

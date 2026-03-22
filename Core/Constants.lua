@@ -19,7 +19,7 @@ C.TABS = { "crafts", "shopping", "planner" }
 
 -- UI dimensions
 C.UI = {
-    W        = 420,
+    W        = 460,
     H        = 520,
     TAB_H    = 24,
     HEADER_H = 46,
