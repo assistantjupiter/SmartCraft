@@ -1,0 +1,225 @@
+-- Planner.lua
+-- Target Skill Planner: given a target skill level, compute the
+-- most mat-efficient path from current skill to target.
+--
+-- Strategy:
+--   1. Walk skill levels from current → target-1
+--   2. At each level, pick the recipe that gives a skill-up AND
+--      costs the fewest total reagents (greedy heuristic)
+--   3. Accumulate required mats
+--   4. Subtract what player already owns (bags + bank)
+--   5. Output: craft plan steps + final shopping list
+--
+-- Limitations (TBC API):
+--   - Exact recipe unlock thresholds aren't exposed; we use our
+--     EstimateSkillReq approximation.
+--   - Yields > 1 per craft are respected (numMade field).
+--
+-- Result stored in SmartCraft.Planner.plan and SmartCraft.Planner.buyList
+
+SmartCraft.Planner = {}
+local PL = SmartCraft.Planner
+
+PL.targetSkill = 0
+PL.plan        = {}   -- [{ recipe, craftsNeeded, matsUsed }]
+PL.buyList     = {}   -- [{ itemID, itemName, need, have, toBuy }]
+
+-- ----------------------------------------------------------------
+-- Build a plan to reach targetSkill from current skill
+-- ----------------------------------------------------------------
+function PL:BuildPlan(targetSkill)
+    self.targetSkill = targetSkill
+    self.plan        = {}
+    self.buyList     = {}
+
+    local current = SmartCraft.Recipes.skillLevel
+    local max     = SmartCraft.Recipes.maxSkill
+    targetSkill   = math.min(targetSkill, max)
+
+    if targetSkill <= current then
+        self.errorMsg = "Target skill must be higher than current skill."
+        return
+    end
+    self.errorMsg = nil
+
+    -- Simulate skill progression
+    local simSkill = current
+    -- Track total mats needed across the whole plan
+    local matTotals = {}   -- itemID → total count
+
+    while simSkill < targetSkill do
+        -- Find best recipe available at simSkill
+        local best = self:BestRecipeAt(simSkill)
+        if not best then
+            -- No craftable recipe found — can't continue
+            self.errorMsg = string.format("No recipe available at skill %d. Plan incomplete.", simSkill)
+            break
+        end
+
+        -- How many crafts to reach next meaningful recipe or target?
+        -- Each craft gives ~1 skill-up when orange/yellow. Green is ~50% chance.
+        local skillUpsNeeded = targetSkill - simSkill
+        local craftsMult = 1
+        if best.difficulty == "EASY" then
+            craftsMult = 2   -- ~50% chance, so craft ~2x per skill-up
+        end
+        local craftsForThis = math.ceil(skillUpsNeeded * craftsMult)
+
+        -- Don't over-plan: stop when next recipe bracket would change
+        -- (i.e., only plan until this recipe would turn grey)
+        local greyAt = self:GreyAt(best, simSkill)
+        local skillUpsHere = greyAt - simSkill
+        if skillUpsHere <= 0 then skillUpsHere = 1 end
+        local craftsHere = math.ceil(skillUpsHere * craftsMult)
+        craftsHere = math.min(craftsHere, craftsForThis)
+
+        -- Accumulate mats
+        local matsUsed = {}
+        for id, perCraft in pairs(best.reagents) do
+            local total = perCraft * craftsHere
+            matsUsed[id] = total
+            matTotals[id] = (matTotals[id] or 0) + total
+        end
+
+        table.insert(self.plan, {
+            recipe       = best,
+            craftsNeeded = craftsHere,
+            matsUsed     = matsUsed,
+            fromSkill    = simSkill,
+            toSkill      = math.min(simSkill + skillUpsHere, targetSkill),
+        })
+
+        simSkill = simSkill + skillUpsHere
+    end
+
+    -- Build buy list: matTotals minus what player owns
+    local owned = SmartCraft.Inventory:GetAllItems()
+    for id, needed in pairs(matTotals) do
+        local have = owned[id] or 0
+        local toBuy = math.max(0, needed - have)
+        table.insert(self.buyList, {
+            itemID   = id,
+            itemName = SmartCraft.ItemCache:Get(id),
+            need     = needed,
+            have     = have,
+            toBuy    = toBuy,
+        })
+    end
+    table.sort(self.buyList, function(a, b) return a.toBuy > b.toBuy end)
+end
+
+-- Find the most efficient recipe for a given skill level
+-- Priority: OPTIMAL > MEDIUM > EASY; tiebreak = fewest total reagent quantity
+function PL:BestRecipeAt(simSkill)
+    local best, bestScore = nil, nil
+    local priority = { OPTIMAL=1, MEDIUM=2, EASY=3 }
+
+    for _, recipe in ipairs(SmartCraft.Recipes.list) do
+        if recipe.difficulty ~= "TRIVIAL" then
+            -- Check recipe is within craftable range at simSkill
+            local lo = recipe.skillReq - 5
+            local hi = self:GreyAt(recipe, simSkill)
+            if simSkill >= lo and simSkill < hi then
+                local p = priority[recipe.difficulty] or 99
+                local cost = self:TotalReagents(recipe)
+                local score = p * 1000 + cost
+                if not best or score < bestScore then
+                    best, bestScore = recipe, score
+                end
+            end
+        end
+    end
+    return best
+end
+
+-- Estimate skill at which a recipe turns grey
+function PL:GreyAt(recipe, currentSkill)
+    -- Orange recipes grey out ~+15 levels after they become yellow
+    -- Approximation: grey when current > skillReq + 45
+    return recipe.skillReq + 45
+end
+
+-- Sum of all reagent counts for one craft
+function PL:TotalReagents(recipe)
+    local n = 0
+    for _, count in pairs(recipe.reagents) do n = n + count end
+    return n
+end
+
+-- ----------------------------------------------------------------
+-- Line builders for UI
+-- ----------------------------------------------------------------
+function PL:GetPlanLines()
+    local lines = {}
+
+    if self.errorMsg then
+        table.insert(lines, { text = "|cffff4444"..self.errorMsg.."|r", r=1, g=0.3, b=0.3 })
+    end
+
+    if #self.plan == 0 then
+        if not self.errorMsg then
+            table.insert(lines, { text="  Set a target skill level below.", r=0.6, g=0.6, b=0.6 })
+        end
+        return lines
+    end
+
+    local C = SmartCraft.Constants.DIFF_COLOR
+
+    for _, step in ipairs(self.plan) do
+        local c = C[step.recipe.difficulty] or C.TRIVIAL
+        local text = string.format(
+            "  %d→%d  |cffffd700[%dx]|r %s",
+            step.fromSkill, step.toSkill,
+            step.craftsNeeded, step.recipe.name
+        )
+        table.insert(lines, { text=text, r=c.r, g=c.g, b=c.b })
+    end
+
+    return lines
+end
+
+function PL:GetBuyLines()
+    local lines = {}
+
+    if #self.buyList == 0 then
+        if #self.plan > 0 then
+            table.insert(lines, { text="  You already have all the mats for this route!", r=0.4, g=1, b=0.6 })
+        end
+        return lines
+    end
+
+    table.insert(lines, { text="── Mats to Buy ──", r=1, g=0.8, b=0.2 })
+    for _, e in ipairs(self.buyList) do
+        if e.toBuy > 0 then
+            local text = string.format(
+                "  Buy %dx |cffffd700%s|r  (need %d, have %d)",
+                e.toBuy, e.itemName, e.need, e.have
+            )
+            table.insert(lines, { text=text, r=0.9, g=0.9, b=0.9 })
+        else
+            local text = string.format("  ✓ %s (%d / %d)", e.itemName, e.have, e.need)
+            table.insert(lines, { text=text, r=0.4, g=0.9, b=0.4 })
+        end
+    end
+
+    return lines
+end
+
+function PL:PrintToChat()
+    if #self.plan == 0 then
+        print("|cff00ff96SmartCraft Planner:|r No plan built yet.")
+        return
+    end
+    print(string.format("|cff00ff96SmartCraft Planner:|r Route to skill %d:", self.targetSkill))
+    for _, step in ipairs(self.plan) do
+        print(string.format("  %d→%d: %dx %s", step.fromSkill, step.toSkill, step.craftsNeeded, step.recipe.name))
+    end
+    if #self.buyList > 0 then
+        print("|cff00ff96Shopping:|r")
+        for _, e in ipairs(self.buyList) do
+            if e.toBuy > 0 then
+                print(string.format("  |cffffd700%dx|r %s", e.toBuy, e.itemName))
+            end
+        end
+    end
+end
