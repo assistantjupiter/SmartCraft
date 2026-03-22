@@ -271,7 +271,7 @@ function VF:Rebuild()
         divTex:ClearAllPoints()
         divTex:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 4, yOff)
         divTex:SetWidth(scrollChild:GetWidth() - 8)
-        divTex:SetText("|cff555566——————————————————|r")
+        divTex:SetText("|cff555566---------------|r")
         divTex:Show()
         yOff = yOff - LH
 

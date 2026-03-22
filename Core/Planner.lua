@@ -295,7 +295,7 @@ function PL:GetPlanLines()
         else
             local c = C[step.recipe.difficulty] or C.TRIVIAL
             local text = string.format(
-                "  %s  |cffaaaaaa×%d|r  |cff888888(%d→%d)|r",
+                "  %s  |cffaaaaaa x%d|r  |cff888888(%d to %d)|r",
                 step.recipe.name, step.craftsNeeded,
                 step.fromSkill, step.toSkill
             )
@@ -316,7 +316,7 @@ function PL:GetBuyLines()
         return lines
     end
 
-    table.insert(lines, { text="── Mats to Buy ──", r=1, g=0.8, b=0.2 })
+    table.insert(lines, { text="-- Mats to Buy --", r=1, g=0.8, b=0.2 })
     for _, e in ipairs(self.buyList) do
         if e.toBuy > 0 then
             local text = string.format(
@@ -325,7 +325,7 @@ function PL:GetBuyLines()
             )
             table.insert(lines, { text=text, r=0.9, g=0.9, b=0.9 })
         else
-            local text = string.format("  ✓ %s (%d / %d)", e.itemName, e.have, e.need)
+            local text = string.format("  [done] %s (%d / %d)", e.itemName, e.have, e.need)
             table.insert(lines, { text=text, r=0.4, g=0.9, b=0.4 })
         end
     end
@@ -340,7 +340,7 @@ function PL:PrintToChat()
     end
     print(string.format("|cff00ff96SmartCraft Planner:|r Route to skill %d:", self.targetSkill))
     for _, step in ipairs(self.plan) do
-        print(string.format("  %d→%d: %dx %s", step.fromSkill, step.toSkill, step.craftsNeeded, step.recipe.name))
+        print(string.format("  %d to %d: %dx %s", step.fromSkill, step.toSkill, step.craftsNeeded, step.recipe.name))
     end
     if #self.buyList > 0 then
         print("|cff00ff96Shopping:|r")

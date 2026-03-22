@@ -37,7 +37,7 @@ function SL:GetLines()
         table.insert(lines, { text = "  Nothing to buy — you have all the mats!", r=0.4, g=1, b=0.6 })
         return lines
     end
-    table.insert(lines, { text = "── Shopping List ──", r=1, g=0.8, b=0.2 })
+    table.insert(lines, { text = "-- Shopping List --", r=1, g=0.8, b=0.2 })
     for _, e in ipairs(self.list) do
         local text = string.format("  Buy %dx |cffffd700%s|r  (have %d)", e.toBuy, e.itemName, e.have)
         table.insert(lines, { text=text, r=0.9, g=0.9, b=0.9 })

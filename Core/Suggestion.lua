@@ -37,7 +37,7 @@ function S:GetReservedLines()
     for _ in pairs(res) do any = true break end
     if not any then return lines end
 
-    table.insert(lines, { text="── Reserved Mats ──", r=0.5, g=0.7, b=1 })
+    table.insert(lines, { text="-- Reserved Mats --", r=0.5, g=0.7, b=1 })
     for id, count in pairs(res) do
         local name = SmartCraft.ItemCache:Get(id)
         table.insert(lines, {
