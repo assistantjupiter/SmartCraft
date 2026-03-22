@@ -255,14 +255,18 @@ end
 -- ----------------------------------------------------------------
 function UI:DoCraft(recipeIdx, times)
     if not recipeIdx then return end
-    -- DoTradeSkill(index, minTime, maxTime, repeatTimes) in TBC
-    -- Simple version: open the trade skill entry and craft
-    TradeSkillFrame_SetSelection(recipeIdx)   -- select in the blizzard list
+    TradeSkillFrame_SetSelection(recipeIdx)
     DoTradeSkill(recipeIdx, times)
-    -- Small delay then re-run analysis
-    C_Timer and C_Timer.After and C_Timer.After(0.3, function()
-        SmartCraft:RunAnalysis()
-        UI:Refresh()
+    -- Re-run analysis after a short delay using a vanilla-compatible ticker frame
+    local ticker = CreateFrame("Frame")
+    local elapsed = 0
+    ticker:SetScript("OnUpdate", function(self, dt)
+        elapsed = elapsed + dt
+        if elapsed >= 0.4 then
+            self:SetScript("OnUpdate", nil)
+            SmartCraft:RunAnalysis()
+            UI:Refresh()
+        end
     end)
 end
 

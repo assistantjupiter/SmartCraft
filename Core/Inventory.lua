@@ -54,10 +54,14 @@ function Inv:ScanContainers(list)
         local slots = GetContainerNumSlots(bag)
         if slots and slots > 0 then
             for slot = 1, slots do
-                local _, count, _, _, _, _, link = GetContainerItemInfo(bag, slot)
+                -- Vanilla/Anniversary GetContainerItemInfo returns:
+                -- texture, count, locked, quality, readable, lootable, link
+                -- (same order as TBC but we use GetContainerItemLink for safety)
+                local link = GetContainerItemLink(bag, slot)
                 if link then
                     local id = self:LinkToID(link)
                     if id then
+                        local _, count = GetContainerItemInfo(bag, slot)
                         items[id] = (items[id] or 0) + (count or 1)
                     end
                 end
