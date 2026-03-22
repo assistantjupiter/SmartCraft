@@ -10,26 +10,35 @@ R.skillName  = ""
 R.skillLevel = 0
 R.maxSkill   = 0
 
--- GetTradeSkillLine() in vanilla Classic 1.x only returns the skill name.
--- Skill level must be fetched via GetProfessions() + GetProfessionInfo().
+-- GetTradeSkillLine() in vanilla Classic 1.x only returns the profession name.
+-- Skill level is read via GetNumSkillLines() + GetSkillLineInfo(i),
+-- which iterates the character's full skill list (available in all Classic versions).
+--
+-- GetSkillLineInfo(i) returns:
+--   skillName, isHeader, isExpanded, skillRank, numTempPoints,
+--   skillModifier, skillMaxRank, isATrait, availableRank, ...
 function R:FetchSkillLevel(skillName)
-    if not GetProfessions then return 0, 0 end
-    -- GetProfessions() returns up to 6 slot indices (prof1, prof2, archaeology, fishing, cooking, firstaid)
-    local slots = { GetProfessions() }
-    for _, slot in ipairs(slots) do
-        if slot then
-            local name, _, rank, maxRank = GetProfessionInfo(slot)
-            if name and name:lower() == (skillName or ""):lower() then
-                return rank or 0, maxRank or 0
+    if not GetNumSkillLines then return 0, 0 end
+    local numLines = GetNumSkillLines()
+    if not numLines or numLines == 0 then return 0, 0 end
+
+    local lowerTarget = (skillName or ""):lower()
+
+    for i = 1, numLines do
+        local name, isHeader, _, skillRank, _, _, skillMaxRank = GetSkillLineInfo(i)
+        if not isHeader and name then
+            if name:lower() == lowerTarget then
+                return skillRank or 0, skillMaxRank or 0
             end
         end
     end
-    -- Fallback: try to find any partial match
-    for _, slot in ipairs(slots) do
-        if slot then
-            local name, _, rank, maxRank = GetProfessionInfo(slot)
-            if name and skillName and name:find(skillName) then
-                return rank or 0, maxRank or 0
+    -- Partial match fallback (handles locale differences)
+    for i = 1, numLines do
+        local name, isHeader, _, skillRank, _, _, skillMaxRank = GetSkillLineInfo(i)
+        if not isHeader and name and lowerTarget ~= "" then
+            if name:lower():find(lowerTarget, 1, true) or
+               lowerTarget:find(name:lower(), 1, true) then
+                return skillRank or 0, skillMaxRank or 0
             end
         end
     end
