@@ -86,30 +86,25 @@ function PL:BuildPlan(targetSkill)
                 toSkill       = simSkill,
                 isTrainerStep = true,
             })
-            -- Skip past this skill point to avoid infinite loop
             simSkill = simSkill + 1
-            goto continue
+        else
+            -- Accumulate mats
+            local matsUsed = {}
+            for id, perCraft in pairs(best.reagents) do
+                local total = perCraft * craftsHere
+                matsUsed[id] = total
+                matTotals[id] = (matTotals[id] or 0) + total
+            end
+
+            table.insert(self.plan, {
+                recipe       = best,
+                craftsNeeded = craftsHere,
+                matsUsed     = matsUsed,
+                fromSkill    = simSkill,
+                toSkill      = math.min(simSkill + skillUpsHere, targetSkill),
+            })
+            simSkill = simSkill + skillUpsHere
         end
-
-        -- Accumulate mats
-        local matsUsed = {}
-        for id, perCraft in pairs(best.reagents) do
-            local total = perCraft * craftsHere
-            matsUsed[id] = total
-            matTotals[id] = (matTotals[id] or 0) + total
-        end
-
-        table.insert(self.plan, {
-            recipe       = best,
-            craftsNeeded = craftsHere,
-            matsUsed     = matsUsed,
-            fromSkill    = simSkill,
-            toSkill      = math.min(simSkill + skillUpsHere, targetSkill),
-        })
-
-        ::continue::
-
-        simSkill = simSkill + skillUpsHere
     end
 
     -- Build buy list: matTotals minus what player owns
