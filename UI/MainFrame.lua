@@ -464,6 +464,14 @@ function UI:BuildCraftLines()
                 maxCrafts   = s.maxCrafts,
                 btnPoolIdx  = btnIdx,
             })
+            -- Build cost sub-line
+            local buildCost = SmartCraft.PriceDB:GetBuildCost(s.recipe)
+            if buildCost then
+                table.insert(lines, {
+                    text = "    Build cost~: " .. SmartCraft.PriceDB:FormatPrices({ build = buildCost }, true),
+                    r=0.55, g=0.55, b=0.65,
+                })
+            end
         end
     end
 
@@ -485,10 +493,26 @@ function UI:BuildShoppingLines()
     local lines = {}
 
     table.insert(lines, { text="Shopping List", isHeader=true, hex="ffd700" })
-    for _, l in ipairs(SmartCraft.ShoppingList:GetLines()) do
-        -- skip the "Shopping List" header line from module (we drew our own)
-        if not l.text:find("Shopping List") then
-            table.insert(lines, l)
+
+    local shopList = SmartCraft.ShoppingList.list
+    if not shopList or #shopList == 0 then
+        table.insert(lines, { text="  Nothing to buy!", r=0.4, g=1, b=0.6 })
+    else
+        for _, entry in ipairs(shopList) do
+            table.insert(lines, {
+                text = string.format("  Buy %dx |cffffd700%s|r  (have %d)",
+                    entry.toBuy, entry.itemName, entry.have),
+                r=0.9, g=0.9, b=0.9,
+            })
+            -- Price sub-line
+            local prices = SmartCraft.PriceDB:Get(entry.itemID)
+            local priceStr = SmartCraft.PriceDB:FormatPrices(prices, true)
+            if priceStr ~= "" then
+                table.insert(lines, {
+                    text = "    " .. priceStr,
+                    r=0.55, g=0.55, b=0.65,
+                })
+            end
         end
     end
 
