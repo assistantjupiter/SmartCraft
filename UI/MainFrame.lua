@@ -14,8 +14,9 @@ local skillLine, bankLine
 local tabs      = {}
 local activeTab = "crafts"
 
-local fsPool  = {}
-local btnPool = {}
+local fsPool    = {}
+local btnPool   = {}
+local stratBtns = {}
 local plannerTargetBox, plannerGoBtn
 
 -- ----------------------------------------------------------------
@@ -610,9 +611,6 @@ function UI:BuildOptimizeLines()
 
     return lines
 end
-
--- Strategy buttons pool (persist across redraws)
-local stratBtns = {}
 
 function UI:RenderStrategyRow(yOff)
     local strategies = {
