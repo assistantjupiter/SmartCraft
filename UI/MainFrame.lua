@@ -60,20 +60,20 @@ function UI:Init()
     frame:SetFrameStrata("HIGH")
     frame:Hide()
 
-    -- Background — solid dark panel
+    -- Background — solid near-black panel
     if frame.SetBackdrop then
         frame:SetBackdrop({
-            bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
+            bgFile   = "Interface\\Buttons\\WHITE8X8",   -- solid colour fill
             edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-            tile     = true, tileSize = 32, edgeSize = 26,
+            tile     = true, tileSize = 8, edgeSize = 26,
             insets   = { left=9, right=9, top=9, bottom=9 },
         })
-        frame:SetBackdropColor(0.05, 0.05, 0.08, 1)
-        frame:SetBackdropBorderColor(0.4, 0.4, 0.5, 1)
+        frame:SetBackdropColor(0, 0, 0, 0.95)            -- near-black 95%
+        frame:SetBackdropBorderColor(0.35, 0.35, 0.45, 1)
     else
-        -- Hard fallback: manual textures
+        -- Hard fallback: solid colour texture
         local bg = frame:CreateTexture(nil, "BACKGROUND")
-        bg:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Background")
+        bg:SetColorTexture(0, 0, 0, 0.95)
         bg:SetAllPoints(frame)
         local edge = frame:CreateTexture(nil, "BORDER")
         edge:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Border")
@@ -82,7 +82,7 @@ function UI:Init()
 
     -- ── Header bar ──────────────────────────────────────────────
     local headerBg = frame:CreateTexture(nil, "ARTWORK")
-    headerBg:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Background-Dark")
+    headerBg:SetColorTexture(0, 0, 0, 1)   -- pure black header bar
     headerBg:SetPoint("TOPLEFT",  frame, "TOPLEFT",  9,  -9)
     headerBg:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -9, -9)
     headerBg:SetHeight(36)
@@ -119,7 +119,7 @@ function UI:Init()
 
     -- ── Tab bar ───────────────────────────────────────────────────
     local tabBarBg = frame:CreateTexture(nil, "ARTWORK")
-    tabBarBg:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Background-Dark")
+    tabBarBg:SetColorTexture(0.04, 0.04, 0.06, 1)   -- very dark tab bar
     tabBarBg:SetPoint("TOPLEFT",  frame, "TOPLEFT",  9,  -46)
     tabBarBg:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -9, -46)
     tabBarBg:SetHeight(UC.TAB_H + 2)
