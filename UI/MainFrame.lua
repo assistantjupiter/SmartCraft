@@ -292,8 +292,12 @@ end
 -- Rebuild content
 -- ----------------------------------------------------------------
 function UI:RebuildContent()
-    for _, fs  in ipairs(fsPool)  do fs:SetText("") ; fs:Hide() end
+    -- pairs covers both numeric and string-keyed entries (e.g. "planner_lbl", "hdr1")
+    for _, fs  in pairs(fsPool)  do fs:SetText("") ; fs:Hide() end
     for _, btn in ipairs(btnPool) do btn:Hide() end
+    -- Always hide planner widgets; they re-show themselves if on planner tab
+    if plannerGoBtn     then plannerGoBtn:Hide() end
+    if plannerTargetBox then plannerTargetBox:Hide() end
 
     local lines = {}
     if     activeTab == "crafts"   then lines = self:BuildCraftLines()
@@ -304,10 +308,6 @@ function UI:RebuildContent()
 
     local LH   = UC.LINE_H
     local yOff = -6
-
-    -- Hide planner widgets if not on planner tab
-    if plannerGoBtn     then plannerGoBtn:Hide() end
-    if plannerTargetBox then plannerTargetBox:Hide() end
 
     for i, line in ipairs(lines) do
 
