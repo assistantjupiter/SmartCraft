@@ -3,7 +3,7 @@
 -- Fully native, no external dependencies.
 
 SmartCraft = SmartCraft or {}
-SmartCraft.version = "0.4.2"
+SmartCraft.version = "0.4.3"
 
 SmartCraft.defaults = {
     includeBank = true,
@@ -17,6 +17,8 @@ eventFrame:RegisterEvent("TRADE_SKILL_CLOSE")
 eventFrame:RegisterEvent("TRADE_SKILL_UPDATE")
 eventFrame:RegisterEvent("BANKFRAME_OPENED")
 eventFrame:RegisterEvent("BANKFRAME_CLOSED")
+eventFrame:RegisterEvent("MERCHANT_SHOW")
+eventFrame:RegisterEvent("MERCHANT_CLOSED")
 
 eventFrame:SetScript("OnEvent", function(self, event, ...)
     if     event == "ADDON_LOADED"     then SmartCraft:OnAddonLoaded(...)
@@ -24,6 +26,8 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
     elseif event == "TRADE_SKILL_CLOSE"  then SmartCraft:OnTradeSkillClose()
     elseif event == "TRADE_SKILL_UPDATE" then SmartCraft:OnTradeSkillUpdate()
     elseif event == "BANKFRAME_OPENED"   then SmartCraft:OnBankOpened()
+    elseif event == "MERCHANT_SHOW"      then SmartCraft:OnMerchantShow()
+    elseif event == "MERCHANT_CLOSED"    then SmartCraft:OnMerchantClosed()
     end
 end)
 
@@ -96,6 +100,23 @@ end
 function SmartCraft:OnTradeSkillUpdate()
     self:RunAnalysis()
     self.UI:Refresh()
+end
+
+function SmartCraft:OnMerchantShow()
+    -- Small delay: merchant data populates a frame after the event
+    local elapsed = 0
+    local ticker = CreateFrame("Frame")
+    ticker:SetScript("OnUpdate", function(self, dt)
+        elapsed = elapsed + dt
+        if elapsed >= 0.2 then
+            self:SetScript("OnUpdate", nil)
+            SmartCraft.VendorFrame:OnMerchantShow()
+        end
+    end)
+end
+
+function SmartCraft:OnMerchantClosed()
+    SmartCraft.VendorFrame:Hide()
 end
 
 function SmartCraft:OnBankOpened()
