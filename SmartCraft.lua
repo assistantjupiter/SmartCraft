@@ -3,7 +3,7 @@
 -- Fully native, no external dependencies.
 
 SmartCraft = SmartCraft or {}
-SmartCraft.version = "0.5.0"
+SmartCraft.version = "0.5.1"
 
 SmartCraft.defaults = {
     includeBank = true,
@@ -19,6 +19,8 @@ eventFrame:RegisterEvent("BANKFRAME_OPENED")
 eventFrame:RegisterEvent("BANKFRAME_CLOSED")
 eventFrame:RegisterEvent("MERCHANT_SHOW")
 eventFrame:RegisterEvent("MERCHANT_CLOSED")
+eventFrame:RegisterEvent("AUCTION_HOUSE_SHOW")
+eventFrame:RegisterEvent("AUCTION_HOUSE_CLOSED")
 
 eventFrame:SetScript("OnEvent", function(self, event, ...)
     if     event == "ADDON_LOADED"     then SmartCraft:OnAddonLoaded(...)
@@ -26,8 +28,10 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
     elseif event == "TRADE_SKILL_CLOSE"  then SmartCraft:OnTradeSkillClose()
     elseif event == "TRADE_SKILL_UPDATE" then SmartCraft:OnTradeSkillUpdate()
     elseif event == "BANKFRAME_OPENED"   then SmartCraft:OnBankOpened()
-    elseif event == "MERCHANT_SHOW"      then SmartCraft:OnMerchantShow()
-    elseif event == "MERCHANT_CLOSED"    then SmartCraft:OnMerchantClosed()
+    elseif event == "MERCHANT_SHOW"        then SmartCraft:OnMerchantShow()
+    elseif event == "MERCHANT_CLOSED"      then SmartCraft:OnMerchantClosed()
+    elseif event == "AUCTION_HOUSE_SHOW"   then SmartCraft:OnAuctionShow()
+    elseif event == "AUCTION_HOUSE_CLOSED" then SmartCraft:OnAuctionClosed()
     end
 end)
 
@@ -111,6 +115,23 @@ function SmartCraft:OnTradeSkillUpdate()
             SmartCraft.UI:Refresh()
         end
     end)
+end
+
+function SmartCraft:OnAuctionShow()
+    -- Slight delay: AH frame initialises a frame after the event
+    local elapsed = 0
+    local ticker = CreateFrame("Frame")
+    ticker:SetScript("OnUpdate", function(self, dt)
+        elapsed = elapsed + dt
+        if elapsed >= 0.3 then
+            self:SetScript("OnUpdate", nil)
+            SmartCraft.AuctionFrame:OnAuctionShow()
+        end
+    end)
+end
+
+function SmartCraft:OnAuctionClosed()
+    SmartCraft.AuctionFrame:Hide()
 end
 
 function SmartCraft:OnMerchantShow()
