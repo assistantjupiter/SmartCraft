@@ -127,12 +127,13 @@ function UI:Init()
         { key="crafts",   label="Crafts"   },
         { key="shopping", label="Shopping" },
         { key="planner",  label="Planner"  },
+        { key="optimize", label="Optimize" },
         { key="help",     label="Guide"    },
     }
     local tx = 14
     for _, def in ipairs(tabDefs) do
         local tbtn = CreateFrame("Button", "SCTab_"..def.key, frame)
-        tbtn:SetSize(78, UC.TAB_H)
+        tbtn:SetSize(68, UC.TAB_H)
         tbtn:SetPoint("TOPLEFT", frame, "TOPLEFT", tx, -(UC.HEADER_H + 2))
 
         -- tab background
@@ -171,7 +172,7 @@ function UI:Init()
         end)
 
         tabs[def.key] = tbtn
-        tx = tx + 82
+        tx = tx + 72
     end
 
     -- ── Divider below tabs ────────────────────────────────────────
@@ -298,11 +299,14 @@ function UI:RebuildContent()
     -- Always hide planner widgets; they re-show themselves if on planner tab
     if plannerGoBtn     then plannerGoBtn:Hide() end
     if plannerTargetBox then plannerTargetBox:Hide() end
+    -- Always hide strategy buttons; re-shown by optimize tab
+    for _, b in ipairs(stratBtns) do b:Hide() end
 
     local lines = {}
     if     activeTab == "crafts"   then lines = self:BuildCraftLines()
     elseif activeTab == "shopping" then lines = self:BuildShoppingLines()
     elseif activeTab == "planner"  then lines = self:BuildPlannerLines()
+    elseif activeTab == "optimize" then lines = self:BuildOptimizeLines()
     elseif activeTab == "help"     then lines = self:BuildHelpLines()
     end
 
@@ -311,8 +315,12 @@ function UI:RebuildContent()
 
     for i, line in ipairs(lines) do
 
+        -- ── Strategy selector row (Optimize tab) ────────────────
+        if line.isStrategyRow then
+            yOff = self:RenderStrategyRow(yOff)
+
         -- ── Planner inline input row ─────────────────────────────
-        if line.isPlannerInput then
+        elseif line.isPlannerInput then
             -- Create once, reuse after
             if not plannerTargetBox then
                 plannerTargetBox = CreateFrame("EditBox", "SCPlannerTarget", scrollChild, "InputBoxTemplate")
@@ -567,6 +575,73 @@ function UI:BuildPlannerLines()
     end
 
     return lines
+end
+
+function UI:BuildOptimizeLines()
+    local lines = {}
+    local OPT   = SmartCraft.Optimizer
+
+    -- Strategy selector buttons rendered as a special widget row
+    table.insert(lines, { isStrategyRow = true })
+
+    local headers = {
+        cheapest = "Cheapest Skill-Ups",
+        ah       = "Best AH Profit",
+        de       = "Best DE Profit",
+        deprofit = "DE Profit Only (break-even+)",
+    }
+    table.insert(lines, {
+        text = headers[OPT.strategy] or "Optimize",
+        isHeader = true, hex = "ffd700",
+    })
+
+    local desc = {
+        cheapest = "  Ranked by lowest build cost per skill-up.",
+        ah       = "  Ranked by AH sell - build cost. Needs TSM/Auctionator.",
+        de       = "  Ranked by Disenchant value - build cost.",
+        deprofit = "  Only recipes where DE value covers build cost.",
+    }
+    table.insert(lines, { text = desc[OPT.strategy] or "", r=0.5, g=0.5, b=0.65 })
+    table.insert(lines, { text = " ", r=1,g=1,b=1 })
+
+    for _, l in ipairs(OPT:GetLines()) do
+        table.insert(lines, l)
+    end
+
+    return lines
+end
+
+-- Strategy buttons pool (persist across redraws)
+local stratBtns = {}
+
+function UI:RenderStrategyRow(yOff)
+    local strategies = {
+        { key="cheapest",  label="Cheapest"  },
+        { key="ah",        label="AH Profit" },
+        { key="de",        label="DE Profit" },
+        { key="deprofit",  label="DE>=Cost"  },
+    }
+    local bw, bh, bx = 82, 20, 4
+    for i, def in ipairs(strategies) do
+        local btn = stratBtns[i]
+        if not btn then
+            btn = CreateFrame("Button", "SCStratBtn"..i, scrollChild, "UIPanelButtonTemplate")
+            btn:SetSize(bw, bh)
+            stratBtns[i] = btn
+        end
+        btn:ClearAllPoints()
+        btn:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", bx, yOff)
+        btn:SetText(def.label)
+        local key = def.key
+        btn:SetScript("OnClick", function()
+            SmartCraft.Optimizer:Run(key)
+            UI:RebuildContent()
+        end)
+        btn:SetAlpha(SmartCraft.Optimizer.strategy == def.key and 1.0 or 0.55)
+        btn:Show()
+        bx = bx + bw + 2
+    end
+    return yOff - (bh + 8)
 end
 
 function UI:BuildHelpLines()
