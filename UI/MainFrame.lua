@@ -127,11 +127,12 @@ function UI:Init()
         { key="crafts",   label="Crafts"   },
         { key="shopping", label="Shopping" },
         { key="planner",  label="Planner"  },
+        { key="help",     label="?"        },
     }
     local tx = 14
     for _, def in ipairs(tabDefs) do
         local tbtn = CreateFrame("Button", "SCTab_"..def.key, frame)
-        tbtn:SetSize(86, UC.TAB_H)
+        tbtn:SetSize(78, UC.TAB_H)
         tbtn:SetPoint("TOPLEFT", frame, "TOPLEFT", tx, -(UC.HEADER_H + 2))
 
         -- tab background
@@ -170,7 +171,7 @@ function UI:Init()
         end)
 
         tabs[def.key] = tbtn
-        tx = tx + 90
+        tx = tx + 82
     end
 
     -- ── Divider below tabs ────────────────────────────────────────
@@ -324,6 +325,7 @@ function UI:RebuildContent()
     if     activeTab == "crafts"   then lines = self:BuildCraftLines()
     elseif activeTab == "shopping" then lines = self:BuildShoppingLines()
     elseif activeTab == "planner"  then lines = self:BuildPlannerLines()
+    elseif activeTab == "help"     then lines = self:BuildHelpLines()
     end
 
     local LH   = UC.LINE_H
@@ -507,6 +509,86 @@ function UI:BuildPlannerLines()
 
     table.insert(lines, { text=" ", r=1,g=1,b=1 })
     table.insert(lines, { text="  Press Print to output plan to chat.", r=0.5,g=0.5,b=0.5 })
+    return lines
+end
+
+function UI:BuildHelpLines()
+    local W = 0.85
+    local lines = {}
+
+    local function H1(text, hex)
+        table.insert(lines, { text=text, isHeader=true, hex=hex or "ffd700" })
+    end
+    local function P(text, r, g, b)
+        table.insert(lines, { text=text, r=r or W, g=g or W, b=b or W })
+    end
+    local function Gap()
+        table.insert(lines, { text=" ", r=1, g=1, b=1 })
+    end
+
+    H1("What is SmartCraft?")
+    P("SmartCraft helps you level professions faster")
+    P("by figuring out the smartest crafting order")
+    P("based on what's already in your bags and bank.")
+    Gap()
+
+    H1("The Problem It Solves", "ff9966")
+    P("Crafting the easiest recipe first can waste")
+    P("materials you need for higher-skill recipes.")
+    P("SmartCraft prevents that.")
+    Gap()
+
+    H1("How It Works — 3 Phases", "66ff99")
+    P("|cffffd700Phase 1 — Reserve|r", 1,1,1)
+    P("  Scans from your MAX skill recipe down")
+    P("  to your current skill.  Locks in enough")
+    P("  materials for each orange/yellow recipe")
+    P("  before anything is crafted.")
+    Gap()
+    P("|cffffd700Phase 2 — Suggest|r", 1,1,1)
+    P("  Uses only what's LEFT OVER after")
+    P("  reservation.  These are your safe crafts")
+    P("  — you won't break any future recipe.")
+    Gap()
+    P("|cffffd700Phase 3 — Shop|r", 1,1,1)
+    P("  Finds every recipe you ALMOST have")
+    P("  enough mats for, and tells you exactly")
+    P("  what to buy to unlock more skill-ups.")
+    Gap()
+
+    H1("The Tabs", "88bbff")
+    P("|cffffd700Crafts|r  — Safe recipes to craft now.")
+    P("  Color = skill-up chance:")
+    P("  |cffff8040Orange|r = guaranteed  |cffffd700Yellow|r = likely")
+    P("  |cff40c040Green|r  = possible    |cff888888Gray|r   = none")
+    P("  Click [Craft] to craft directly.")
+    Gap()
+    P("|cffffd700Shopping|r  — What to buy at the AH")
+    P("  to unlock more skill-up recipes.")
+    P("  Press Print to paste the list to chat.")
+    Gap()
+    P("|cffffd700Planner|r  — Enter a target skill level.")
+    P("  Gets a full route: which recipes to")
+    P("  craft and exactly how many mats to buy.")
+    Gap()
+
+    H1("Bank Scanning", "aaaaff")
+    P("SmartCraft caches your bank contents")
+    P("when you visit the bank.  It uses them")
+    P("automatically so you never have to carry")
+    P("everything to the trainer first.")
+    P("Right-click the minimap icon to toggle")
+    P("bank on or off.  Status shown top-right.")
+    Gap()
+
+    H1("Commands", "cccccc")
+    P("  /sc              open/close panel")
+    P("  /sc bank         toggle bank scanning")
+    P("  /sc shop         jump to Shopping tab")
+    P("  /sc plan         jump to Planner tab")
+    P("  /sc errors       show error log")
+    Gap()
+
     return lines
 end
 
