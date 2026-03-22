@@ -236,31 +236,8 @@ function UI:Init()
         end
     end)
 
-    -- ── Planner input ─────────────────────────────────────────────
-    plannerGoBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    plannerGoBtn:SetSize(52, 22)
-    plannerGoBtn:SetPoint("TOPRIGHT", scrollFrame, "TOPRIGHT", 0, 26)
-    plannerGoBtn:SetText("Plan")
-    plannerGoBtn:SetScript("OnClick", function()
-        local val = tonumber(plannerTargetBox:GetText())
-        if val then
-            SmartCraft.Planner:BuildPlan(val)
-            UI:RebuildContent()
-        else
-            print("|cff00ff96SmartCraft:|r Enter a numeric target skill.")
-        end
-    end)
-    plannerGoBtn:Hide()
-
-    plannerTargetBox = CreateFrame("EditBox", "SCPlannerTarget", frame, "InputBoxTemplate")
-    plannerTargetBox:SetSize(60, 20)
-    plannerTargetBox:SetPoint("RIGHT", plannerGoBtn, "LEFT", -4, 0)
-    plannerTargetBox:SetAutoFocus(false)
-    plannerTargetBox:SetNumeric(true)
-    plannerTargetBox:SetMaxLetters(3)
-    plannerTargetBox:SetScript("OnEnterPressed", function() plannerGoBtn:Click() end)
-    plannerTargetBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
-    plannerTargetBox:Hide()
+    -- Planner input widgets are created lazily inside BuildPlannerLines
+    -- so they sit inside the scroll area, not floating above the tabs.
 
     self.frame       = frame
     self.scrollChild = scrollChild
@@ -286,9 +263,6 @@ function UI:SwitchTab(key)
             tbtn.label:SetTextColor(0.7, 0.7, 0.7)
         end
     end
-    local isPlanner = (key == "planner")
-    if plannerTargetBox then plannerTargetBox:SetShown(isPlanner) end
-    if plannerGoBtn     then plannerGoBtn:SetShown(isPlanner)     end
     self:RebuildContent()
 end
 
@@ -331,9 +305,68 @@ function UI:RebuildContent()
     local LH   = UC.LINE_H
     local yOff = -6
 
+    -- Hide planner widgets if not on planner tab
+    if plannerGoBtn     then plannerGoBtn:Hide() end
+    if plannerTargetBox then plannerTargetBox:Hide() end
+
     for i, line in ipairs(lines) do
-        -- Section header style
-        if line.isHeader then
+
+        -- ── Planner inline input row ─────────────────────────────
+        if line.isPlannerInput then
+            -- Create once, reuse after
+            if not plannerTargetBox then
+                plannerTargetBox = CreateFrame("EditBox", "SCPlannerTarget", scrollChild, "InputBoxTemplate")
+                plannerTargetBox:SetSize(80, 22)
+                plannerTargetBox:SetAutoFocus(false)
+                plannerTargetBox:SetNumeric(true)
+                plannerTargetBox:SetMaxLetters(3)
+                plannerTargetBox:SetScript("OnEnterPressed", function()
+                    if plannerGoBtn then plannerGoBtn:Click() end
+                end)
+                plannerTargetBox:SetScript("OnEscapePressed", function(self)
+                    self:ClearFocus()
+                end)
+            end
+            if not plannerGoBtn then
+                plannerGoBtn = CreateFrame("Button", "SCPlannerGoBtn", scrollChild, "UIPanelButtonTemplate")
+                plannerGoBtn:SetSize(60, 22)
+                plannerGoBtn:SetText("Plan")
+                plannerGoBtn:SetScript("OnClick", function()
+                    local val = tonumber(plannerTargetBox:GetText())
+                    if val then
+                        SmartCraft.Planner:BuildPlan(val)
+                        UI:RebuildContent()
+                    else
+                        print("|cff00ff96SmartCraft:|r Enter a numeric target skill (e.g. 300).")
+                    end
+                end)
+            end
+
+            -- Position label
+            local lbl = fsPool["planner_lbl"]
+            if not lbl then
+                lbl = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                lbl:SetJustifyH("LEFT")
+                fsPool["planner_lbl"] = lbl
+            end
+            lbl:ClearAllPoints()
+            lbl:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 6, yOff)
+            lbl:SetText("Target skill:")
+            lbl:SetTextColor(0.8, 0.8, 0.8)
+            lbl:Show()
+
+            plannerTargetBox:ClearAllPoints()
+            plannerTargetBox:SetPoint("LEFT", lbl, "RIGHT", 10, 0)
+            plannerTargetBox:Show()
+
+            plannerGoBtn:ClearAllPoints()
+            plannerGoBtn:SetPoint("LEFT", plannerTargetBox, "RIGHT", 6, 0)
+            plannerGoBtn:Show()
+
+            yOff = yOff - (UC.LINE_H + 8)
+
+        -- ── Section header style
+        elseif line.isHeader then
             -- Coloured background bar for section headers
             local hdr = fsPool["hdr"..i]
             if not hdr then
@@ -486,29 +519,29 @@ function UI:BuildPlannerLines()
 
     table.insert(lines, { text="Skill Route Planner", isHeader=true, hex="66ff99" })
 
-    if PL.targetSkill == 0 and #PL.plan == 0 then
-        table.insert(lines, { text="  Enter a target skill level and press Plan.", r=0.6,g=0.6,b=0.6 })
-        table.insert(lines, { text=" ", r=1,g=1,b=1 })
-        table.insert(lines, {
-            text = string.format("  Current skill:  %d / %d",
-                SmartCraft.Recipes.skillLevel, SmartCraft.Recipes.maxSkill),
-            r=0.7, g=0.7, b=0.7,
-        })
-        return lines
-    end
+    -- Inline input row (rendered as a widget line, not FontString)
+    table.insert(lines, { isPlannerInput = true })
+
+    table.insert(lines, {
+        text = string.format("  Current skill:  %d / %d",
+            SmartCraft.Recipes.skillLevel, SmartCraft.Recipes.maxSkill),
+        r=0.7, g=0.7, b=0.7,
+    })
 
     if PL.errorMsg then
         table.insert(lines, { text="  "..PL.errorMsg, r=1, g=0.3, b=0.3 })
     end
 
-    for _, l in ipairs(PL:GetPlanLines())  do table.insert(lines, l) end
+    if #PL.plan > 0 then
+        table.insert(lines, { text=" ", r=1,g=1,b=1 })
+        for _, l in ipairs(PL:GetPlanLines()) do table.insert(lines, l) end
+        table.insert(lines, { text=" ", r=1,g=1,b=1 })
+        table.insert(lines, { text="Mats to Buy", isHeader=true, hex="ffd700" })
+        for _, l in ipairs(PL:GetBuyLines()) do table.insert(lines, l) end
+        table.insert(lines, { text=" ", r=1,g=1,b=1 })
+        table.insert(lines, { text="  Press Print to output plan to chat.", r=0.5,g=0.5,b=0.5 })
+    end
 
-    table.insert(lines, { text=" ", r=1,g=1,b=1 })
-    table.insert(lines, { text="Mats to Buy", isHeader=true, hex="ffd700" })
-    for _, l in ipairs(PL:GetBuyLines())   do table.insert(lines, l) end
-
-    table.insert(lines, { text=" ", r=1,g=1,b=1 })
-    table.insert(lines, { text="  Press Print to output plan to chat.", r=0.5,g=0.5,b=0.5 })
     return lines
 end
 
