@@ -3,7 +3,7 @@
 -- Fully native, no external dependencies.
 
 SmartCraft = SmartCraft or {}
-SmartCraft.version = "0.3.3"
+SmartCraft.version = "0.3.4"
 
 SmartCraft.defaults = {
     includeBank = true,
@@ -37,35 +37,37 @@ function SmartCraft:OnAddonLoaded(name)
     end
 
     print("|cff00ff96SmartCraft|r v" .. self.version .. " loaded.")
-    print("  |cffaaaaaa/sc|r          open panel      |cffaaaaaa/sc bank|r  toggle bank")
-    print("  |cffaaaaaa/sc shop|r     shopping list    |cffaaaaaa/sc plan|r  open planner")
+    print("  |cffaaaaaa/sc|r          open panel      |cffaaaaaa/sc bank|r    toggle bank")
+    print("  |cffaaaaaa/sc shop|r     shopping list    |cffaaaaaa/sc plan|r    open planner")
+    print("  |cffaaaaaa/sc errors|r   show error log   |cffaaaaaa/sc clearerrors|r  wipe log")
 
     SLASH_SMARTCRAFT1 = "/smartcraft"
     SLASH_SMARTCRAFT2 = "/sc"
     SlashCmdList["SMARTCRAFT"] = function(msg)
-        local cmd = string.lower(string.match(msg or "", "^%s*(%S*)"))
-        if cmd == "bank" then
-            SmartCraftDB.includeBank = not SmartCraftDB.includeBank
-            local s = SmartCraftDB.includeBank and "|cff00ff00ON|r" or "|cffff4444OFF|r"
-            print("|cff00ff96SmartCraft:|r Bank scanning " .. s)
-            if TradeSkillFrame and TradeSkillFrame:IsShown() then
-                SmartCraft:RunAnalysis()
-                SmartCraft.UI:Refresh()
-            end
-        elseif cmd == "shop" then
-            if not TradeSkillFrame or not TradeSkillFrame:IsShown() then
-                print("|cff00ff96SmartCraft:|r Open your profession window first.")
-            else
+        local ok, err = pcall(function()
+            local cmd = string.lower(string.match(msg or "", "^%s*(%S*)"))
+            if cmd == "bank" then
+                SmartCraftDB.includeBank = not SmartCraftDB.includeBank
+                local s = SmartCraftDB.includeBank and "|cff00ff00ON|r" or "|cffff4444OFF|r"
+                print("|cff00ff96SmartCraft:|r Bank scanning " .. s)
+                if TradeSkillFrame and TradeSkillFrame:IsShown() then
+                    SmartCraft:RunAnalysis()
+                    SmartCraft.UI:Refresh()
+                end
+            elseif cmd == "shop" then
                 SmartCraft.UI:ShowTab("shopping")
-            end
-        elseif cmd == "plan" then
-            if not TradeSkillFrame or not TradeSkillFrame:IsShown() then
-                print("|cff00ff96SmartCraft:|r Open your profession window first.")
-            else
+            elseif cmd == "plan" then
                 SmartCraft.UI:ShowTab("planner")
+            elseif cmd == "errors" then
+                SmartCraft.ErrorLog:Print()
+            elseif cmd == "clearerrors" then
+                SmartCraft.ErrorLog:Clear()
+            else
+                SmartCraft:ToggleUI()
             end
-        else
-            SmartCraft:ToggleUI()
+        end)
+        if not ok then
+            SmartCraft.ErrorLog:Add("SlashCmd", err)
         end
     end
 end
@@ -93,23 +95,28 @@ function SmartCraft:OnBankOpened()
 end
 
 function SmartCraft:RunAnalysis()
-    self.Inventory:ScanBags()
-    self.Recipes:Scan()
-    self.Reservation:Run()
-    self.ShoppingList:Build()
-    -- Planner re-runs only if a target was already set
+    local EL = self.ErrorLog
+    EL:Wrap("Inventory:ScanBags",  function() self.Inventory:ScanBags() end)
+    EL:Wrap("Recipes:Scan",        function() self.Recipes:Scan() end)
+    EL:Wrap("Reservation:Run",     function() self.Reservation:Run() end)
+    EL:Wrap("ShoppingList:Build",  function() self.ShoppingList:Build() end)
     if self.Planner.targetSkill and self.Planner.targetSkill > 0 then
-        self.Planner:BuildPlan(self.Planner.targetSkill)
+        EL:Wrap("Planner:BuildPlan", function()
+            self.Planner:BuildPlan(self.Planner.targetSkill)
+        end)
     end
 end
 
 function SmartCraft:ToggleUI()
-    if self.UI:IsShown() then
-        self.UI:Hide()
-    else
-        -- Scan + show even without the trade skill window open,
-        -- so the user can at least see the panel and planner.
-        self:RunAnalysis()
-        self.UI:Show()
+    local ok, err = pcall(function()
+        if self.UI:IsShown() then
+            self.UI:Hide()
+        else
+            self:RunAnalysis()
+            self.UI:Show()
+        end
+    end)
+    if not ok then
+        self.ErrorLog:Add("ToggleUI", err)
     end
 end
