@@ -1,29 +1,33 @@
 -- MainFrame.lua
--- Fully native WoW frame — TBC Classic 2.5.5 (Interface 20502)
--- No external library dependencies.
---
--- Tabs: [Crafts] [Shopping] [Planner]
---
--- Crafts tab:   colored suggestion rows, each with a [Craft] button
--- Shopping tab: buy list + per-recipe breakdown
--- Planner tab:  target skill input, craft route, mats-to-buy list
+-- Fully native WoW frame — vanilla Classic / Anniversary compatible.
+-- Avoids all Dragonflight/TBC-only frame templates.
+-- Uses SetBackdrop + manual title/close for maximum compatibility.
 
 SmartCraft.UI = {}
 local UI = SmartCraft.UI
 
-local UC = SmartCraft.Constants.UI  -- W, H, TAB_H, HEADER_H, FOOTER_H, LINE_H, SCROLL_R
+local UC = SmartCraft.Constants.UI
+local W, H = UC.W, UC.H
 
 local frame, scrollFrame, scrollChild
 local skillLine, bankLine
-local tabs    = {}
+local tabs      = {}
 local activeTab = "crafts"
 
--- Font string pool: WoW can't destroy FontStrings, so we reuse them
-local fsPool    = {}
-local btnPool   = {}   -- craft buttons pool
+local fsPool  = {}
+local btnPool = {}
 
--- Planner widgets (created once)
-local plannerTargetBox, plannerGoBtn, plannerPrintBtn
+local plannerTargetBox, plannerGoBtn
+
+-- Standard vanilla backdrop
+local BACKDROP = {
+    bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
+    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+    tile     = true,
+    tileSize = 32,
+    edgeSize = 32,
+    insets   = { left=11, right=12, top=12, bottom=11 },
+}
 
 -- ----------------------------------------------------------------
 -- Build the static frame skeleton (called once)
@@ -31,64 +35,80 @@ local plannerTargetBox, plannerGoBtn, plannerPrintBtn
 function UI:Init()
     if frame then return end
 
-    local W, H = UC.W, UC.H
-
     -- ── Main window ─────────────────────────────────────────────
-    frame = CreateFrame("Frame", "SmartCraftMainFrame", UIParent, "BasicFrameTemplateWithInset")
+    frame = CreateFrame("Frame", "SmartCraftMainFrame", UIParent)
     frame:SetSize(W, H)
     frame:SetPoint("CENTER")
+    frame:SetBackdrop(BACKDROP)
+    frame:SetBackdropColor(0, 0, 0, 1)
     frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart", frame.StartMoving)
     frame:SetScript("OnDragStop",  frame.StopMovingOrSizing)
     frame:SetToplevel(true)
+    frame:SetFrameStrata("HIGH")
     frame:Hide()
-    frame.TitleText:SetText("|cff00ff96⚒|r SmartCraft")
 
-    -- ── Status row ──────────────────────────────────────────────
+    -- ── Title bar ───────────────────────────────────────────────
+    local titleBg = frame:CreateTexture(nil, "OVERLAY")
+    titleBg:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
+    titleBg:SetWidth(300)
+    titleBg:SetHeight(64)
+    titleBg:SetPoint("TOP", frame, "TOP", 0, 12)
+
+    local titleText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    titleText:SetPoint("TOP", frame, "TOP", 0, -2)
+    titleText:SetText("|cff00ff96⚒|r SmartCraft")
+
+    -- ── Close button ─────────────────────────────────────────────
+    local closeBtn = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+    closeBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 2, 2)
+    closeBtn:SetScript("OnClick", function() frame:Hide() end)
+
+    -- ── Status row ───────────────────────────────────────────────
     skillLine = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    skillLine:SetPoint("TOPLEFT",  frame, "TOPLEFT",  12, -30)
+    skillLine:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -20)
     skillLine:SetText("")
 
     bankLine = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    bankLine:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -28, -30)
+    bankLine:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -28, -20)
     bankLine:SetJustifyH("RIGHT")
     bankLine:SetText("")
 
-    -- ── Tab buttons ─────────────────────────────────────────────
+    -- ── Tab buttons ──────────────────────────────────────────────
     local tabDefs = {
         { key="crafts",   label="Crafts"   },
         { key="shopping", label="Shopping" },
         { key="planner",  label="Planner"  },
     }
-    local tx = 10
+    local tx = 14
     for _, def in ipairs(tabDefs) do
         local btn = CreateFrame("Button", "SCTab_"..def.key, frame, "UIPanelButtonTemplate")
-        btn:SetSize(88, UC.TAB_H)
+        btn:SetSize(86, UC.TAB_H)
         btn:SetPoint("TOPLEFT", frame, "TOPLEFT", tx, -UC.HEADER_H)
         btn:SetText(def.label)
         local key = def.key
         btn:SetScript("OnClick", function() UI:SwitchTab(key) end)
         tabs[def.key] = btn
-        tx = tx + 92
+        tx = tx + 90
     end
 
-    -- ── Scroll area ─────────────────────────────────────────────
-    local scrollTop = UC.HEADER_H + UC.TAB_H + 4
+    -- ── Scroll area ──────────────────────────────────────────────
+    local scrollTop = UC.HEADER_H + UC.TAB_H + 6
     scrollFrame = CreateFrame("ScrollFrame", "SmartCraftScroll", frame, "UIPanelScrollFrameTemplate")
-    scrollFrame:SetPoint("TOPLEFT",     frame, "TOPLEFT",     10,         -scrollTop)
+    scrollFrame:SetPoint("TOPLEFT",     frame, "TOPLEFT",     14,          -scrollTop)
     scrollFrame:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -UC.SCROLL_R, UC.FOOTER_H)
 
     scrollChild = CreateFrame("Frame", "SmartCraftScrollChild", scrollFrame)
-    scrollChild:SetWidth(W - 10 - UC.SCROLL_R - 4)
+    scrollChild:SetWidth(W - 14 - UC.SCROLL_R - 4)
     scrollChild:SetHeight(1)
     scrollFrame:SetScrollChild(scrollChild)
 
     -- ── Footer ───────────────────────────────────────────────────
     local refreshBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     refreshBtn:SetSize(68, 20)
-    refreshBtn:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 10, 6)
+    refreshBtn:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 14, 14)
     refreshBtn:SetText("Refresh")
     refreshBtn:SetScript("OnClick", function()
         SmartCraft:RunAnalysis()
@@ -97,7 +117,7 @@ function UI:Init()
 
     local bankToggle = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     bankToggle:SetSize(100, 20)
-    bankToggle:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 84, 6)
+    bankToggle:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 88, 14)
     bankToggle:SetText("Toggle Bank")
     bankToggle:SetScript("OnClick", function()
         if SmartCraftDB then
@@ -109,7 +129,7 @@ function UI:Init()
 
     local printBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     printBtn:SetSize(70, 20)
-    printBtn:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -28, 6)
+    printBtn:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 14)
     printBtn:SetText("Print")
     printBtn:SetScript("OnClick", function()
         if activeTab == "shopping" then
@@ -119,7 +139,7 @@ function UI:Init()
         end
     end)
 
-    -- ── Planner controls (hidden by default) ────────────────────
+    -- ── Planner controls ─────────────────────────────────────────
     plannerGoBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     plannerGoBtn:SetSize(52, 22)
     plannerGoBtn:SetPoint("TOPRIGHT", scrollFrame, "TOPRIGHT", 0, 26)
@@ -136,19 +156,16 @@ function UI:Init()
     plannerGoBtn:Hide()
 
     plannerTargetBox = CreateFrame("EditBox", "SCPlannerTarget", frame, "InputBoxTemplate")
-    plannerTargetBox:SetSize(60, 22)
+    plannerTargetBox:SetSize(60, 20)
     plannerTargetBox:SetPoint("RIGHT", plannerGoBtn, "LEFT", -4, 0)
     plannerTargetBox:SetAutoFocus(false)
     plannerTargetBox:SetNumeric(true)
     plannerTargetBox:SetMaxLetters(3)
-    local placeholder = plannerTargetBox:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-    placeholder:SetPoint("LEFT", plannerTargetBox, "LEFT", 4, 0)
-    placeholder:SetText("Target")
-    plannerTargetBox:SetScript("OnTextChanged", function(self)
-        placeholder:SetShown(self:GetText() == "")
-    end)
     plannerTargetBox:SetScript("OnEnterPressed", function()
         plannerGoBtn:Click()
+    end)
+    plannerTargetBox:SetScript("OnEscapePressed", function(self)
+        self:ClearFocus()
     end)
     plannerTargetBox:Hide()
 
@@ -165,15 +182,14 @@ function UI:SwitchTab(key)
     for k, btn in pairs(tabs) do
         btn:SetAlpha(k == key and 1.0 or 0.5)
     end
-    -- Show/hide planner controls
     local isPlanner = (key == "planner")
-    plannerTargetBox:SetShown(isPlanner)
-    plannerGoBtn:SetShown(isPlanner)
+    if plannerTargetBox then plannerTargetBox:SetShown(isPlanner) end
+    if plannerGoBtn     then plannerGoBtn:SetShown(isPlanner)     end
     self:RebuildContent()
 end
 
 -- ----------------------------------------------------------------
--- Public refresh (call after analysis runs)
+-- Public refresh
 -- ----------------------------------------------------------------
 function UI:Refresh()
     self:Init()
@@ -183,7 +199,7 @@ end
 
 function UI:UpdateHeader()
     local R = SmartCraft.Recipes
-    if R.skillName ~= "" then
+    if R.skillName and R.skillName ~= "" then
         skillLine:SetText(string.format(
             "|cffffd700%s|r  |cffaaaaaa%d / %d|r",
             R.skillName, R.skillLevel, R.maxSkill
@@ -196,7 +212,6 @@ end
 -- Rebuild scrollable content
 -- ----------------------------------------------------------------
 function UI:RebuildContent()
-    -- Hide all pooled widgets
     for _, fs  in ipairs(fsPool)  do fs:SetText("") ; fs:Hide() end
     for _, btn in ipairs(btnPool) do btn:Hide() end
 
@@ -214,31 +229,28 @@ function UI:RebuildContent()
         if not fs then
             fs = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
             fs:SetJustifyH("LEFT")
-            fs:SetWidth(scrollChild:GetWidth() - (line.hasCraftBtn and 60 or 4))
             fsPool[i] = fs
         end
         fs:ClearAllPoints()
         fs:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 4, yOff)
+        local lineWidth = scrollChild:GetWidth() - (line.hasCraftBtn and 64 or 4)
+        fs:SetWidth(lineWidth)
         fs:SetText(line.text or "")
         fs:SetTextColor(line.r or 1, line.g or 1, line.b or 1)
-        fs:SetWidth(scrollChild:GetWidth() - (line.hasCraftBtn and 64 or 4))
         fs:Show()
 
-        -- Click-to-craft button
         if line.hasCraftBtn and line.recipeIdx then
-            local bi = line.btnPoolIdx
+            local bi  = line.btnPoolIdx
             local btn = btnPool[bi]
             if not btn then
                 btn = CreateFrame("Button", "SCCraftBtn"..bi, scrollChild, "UIPanelButtonTemplate")
-                btn:SetSize(56, LH + 1)
+                btn:SetSize(56, LH + 2)
                 btnPool[bi] = btn
             end
             btn:ClearAllPoints()
             btn:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", -4, yOff)
             local idx, times = line.recipeIdx, line.maxCrafts
-            btn:SetScript("OnClick", function()
-                UI:DoCraft(idx, times)
-            end)
+            btn:SetScript("OnClick", function() UI:DoCraft(idx, times) end)
             btn:SetText("Craft")
             btn:Show()
         end
@@ -251,13 +263,12 @@ function UI:RebuildContent()
 end
 
 -- ----------------------------------------------------------------
--- Click-to-craft
+-- Click-to-craft (vanilla-safe ticker)
 -- ----------------------------------------------------------------
 function UI:DoCraft(recipeIdx, times)
     if not recipeIdx then return end
     TradeSkillFrame_SetSelection(recipeIdx)
     DoTradeSkill(recipeIdx, times)
-    -- Re-run analysis after a short delay using a vanilla-compatible ticker frame
     local ticker = CreateFrame("Frame")
     local elapsed = 0
     ticker:SetScript("OnUpdate", function(self, dt)
@@ -274,7 +285,7 @@ end
 -- Content builders
 -- ----------------------------------------------------------------
 function UI:BuildCraftLines()
-    local lines = {}
+    local lines  = {}
     local btnIdx = 0
 
     table.insert(lines, { text="── Safe to Craft ──", r=0.4, g=1, b=0.6 })
@@ -288,7 +299,7 @@ function UI:BuildCraftLines()
             btnIdx = btnIdx + 1
             table.insert(lines, {
                 text        = string.format("  [%dx] %s", s.maxCrafts, s.recipe.name),
-                r           = c.r, g=c.g, b=c.b,
+                r=c.r, g=c.g, b=c.b,
                 hasCraftBtn = true,
                 recipeIdx   = s.recipe.index,
                 maxCrafts   = s.maxCrafts,
@@ -297,11 +308,11 @@ function UI:BuildCraftLines()
         end
     end
 
-    table.insert(lines, { text=" ", r=1,g=1,b=1 })
+    table.insert(lines, { text=" ", r=1, g=1, b=1 })
 
-    local resLines = SmartCraft.Suggestion:GetReservedLines()
-    for _, l in ipairs(resLines) do table.insert(lines, l) end
-
+    for _, l in ipairs(SmartCraft.Suggestion:GetReservedLines()) do
+        table.insert(lines, l)
+    end
     return lines
 end
 
@@ -310,11 +321,10 @@ function UI:BuildShoppingLines()
     for _, l in ipairs(SmartCraft.ShoppingList:GetLines()) do
         table.insert(lines, l)
     end
-
     local gaps = SmartCraft.Reservation.gaps
     if gaps and #gaps > 0 then
-        table.insert(lines, { text=" ",                          r=1,g=1,b=1 })
-        table.insert(lines, { text="── Breakdown by Recipe ──",  r=0.7,g=0.7,b=1 })
+        table.insert(lines, { text=" ", r=1,g=1,b=1 })
+        table.insert(lines, { text="── Breakdown by Recipe ──", r=0.7,g=0.7,b=1 })
         for _, gap in ipairs(gaps) do
             table.insert(lines, { text="  "..gap.recipe.name..":", r=1, g=0.85, b=0.3 })
             for id, count in pairs(gap.short) do
@@ -326,7 +336,6 @@ function UI:BuildShoppingLines()
             end
         end
     end
-
     table.insert(lines, { text=" ", r=1,g=1,b=1 })
     table.insert(lines, { text="|cff888888Press Print to output list to chat|r", r=0.6,g=0.6,b=0.6 })
     return lines
@@ -335,36 +344,25 @@ end
 function UI:BuildPlannerLines()
     local lines = {}
     local PL = SmartCraft.Planner
-
-    if self.targetSkill == 0 and #PL.plan == 0 then
-        table.insert(lines, { text="Enter a target skill level and press Plan.", r=0.6,g=0.6,b=0.6 })
+    if PL.targetSkill == 0 and #PL.plan == 0 then
+        table.insert(lines, { text="Enter a target skill and press Plan.", r=0.6,g=0.6,b=0.6 })
         table.insert(lines, { text=" ", r=1,g=1,b=1 })
         table.insert(lines, {
-            text = string.format(
-                "|cffaaaaaa Current: %d / %d|r",
-                SmartCraft.Recipes.skillLevel,
-                SmartCraft.Recipes.maxSkill
-            ),
+            text = string.format("|cffaaaaaa Current: %d / %d|r",
+                SmartCraft.Recipes.skillLevel, SmartCraft.Recipes.maxSkill),
             r=0.7, g=0.7, b=0.7,
         })
         return lines
     end
-
-    -- Route
     table.insert(lines, {
         text = string.format("── Route to Skill %d ──", PL.targetSkill),
         r=0.4, g=1, b=0.6,
     })
-    for _, l in ipairs(PL:GetPlanLines()) do table.insert(lines, l) end
-
+    for _, l in ipairs(PL:GetPlanLines())  do table.insert(lines, l) end
     table.insert(lines, { text=" ", r=1,g=1,b=1 })
-
-    -- Buy list
-    for _, l in ipairs(PL:GetBuyLines()) do table.insert(lines, l) end
-
+    for _, l in ipairs(PL:GetBuyLines())   do table.insert(lines, l) end
     table.insert(lines, { text=" ", r=1,g=1,b=1 })
     table.insert(lines, { text="|cff888888Press Print to output plan to chat|r", r=0.6,g=0.6,b=0.6 })
-
     return lines
 end
 
