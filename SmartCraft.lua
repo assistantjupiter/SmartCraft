@@ -3,7 +3,7 @@
 -- Fully native, no external dependencies.
 
 SmartCraft = SmartCraft or {}
-SmartCraft.version = "0.3.2"
+SmartCraft.version = "0.3.3"
 
 SmartCraft.defaults = {
     includeBank = true,
@@ -49,22 +49,23 @@ function SmartCraft:OnAddonLoaded(name)
             local s = SmartCraftDB.includeBank and "|cff00ff00ON|r" or "|cffff4444OFF|r"
             print("|cff00ff96SmartCraft:|r Bank scanning " .. s)
             if TradeSkillFrame and TradeSkillFrame:IsShown() then
-                self:RunAnalysis() ; self.UI:Refresh()
+                SmartCraft:RunAnalysis()
+                SmartCraft.UI:Refresh()
             end
         elseif cmd == "shop" then
             if not TradeSkillFrame or not TradeSkillFrame:IsShown() then
                 print("|cff00ff96SmartCraft:|r Open your profession window first.")
             else
-                self.UI:ShowTab("shopping")
+                SmartCraft.UI:ShowTab("shopping")
             end
         elseif cmd == "plan" then
             if not TradeSkillFrame or not TradeSkillFrame:IsShown() then
                 print("|cff00ff96SmartCraft:|r Open your profession window first.")
             else
-                self.UI:ShowTab("planner")
+                SmartCraft.UI:ShowTab("planner")
             end
         else
-            self:ToggleUI()
+            SmartCraft:ToggleUI()
         end
     end
 end
@@ -106,10 +107,8 @@ function SmartCraft:ToggleUI()
     if self.UI:IsShown() then
         self.UI:Hide()
     else
-        if not TradeSkillFrame or not TradeSkillFrame:IsShown() then
-            print("|cff00ff96SmartCraft:|r Open your profession window first.")
-            return
-        end
+        -- Scan + show even without the trade skill window open,
+        -- so the user can at least see the panel and planner.
         self:RunAnalysis()
         self.UI:Show()
     end
