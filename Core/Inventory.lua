@@ -1,11 +1,12 @@
 -- Inventory.lua
--- Scans bags and caches bank contents.
--- TBC Classic 2.5.5: GetContainerItemInfo, GetContainerNumSlots
+-- Scans bags, bank, and mailbox attachments.
+-- WoW Anniversary (vanilla Classic 1.15.x): C_Container.* API
 
 SmartCraft.Inventory = {}
 local Inv = SmartCraft.Inventory
 
-Inv.bagItems = {}
+Inv.bagItems  = {}
+Inv.mailItems = {}   -- items pending in mailbox (in-memory only, not persisted)
 
 -- Bag IDs: 0=backpack, 1-4=bag slots
 local PLAYER_BAGS = { 0, 1, 2, 3, 4 }
@@ -27,11 +28,52 @@ function Inv:ScanBank()
     print(string.format("|cff00ff96SmartCraft:|r Bank cache updated — %d item type%s.", n, n == 1 and "" or "s"))
 end
 
+-- ----------------------------------------------------------------
+-- Scan mailbox attachments (only works while mailbox is open).
+-- Uses GetInboxNumItems / GetInboxItem / GetInboxItemLink.
+-- Mail attachments that haven't been taken yet are counted as
+-- "incoming" and added to the combined pool.
+-- ----------------------------------------------------------------
+function Inv:ScanMail()
+    self.mailItems = {}
+    local numMail = GetInboxNumItems and GetInboxNumItems() or 0
+    if numMail == 0 then return end
+
+    for i = 1, numMail do
+        -- Each mail can have up to ATTACHMENTS_MAX_SEND attachments
+        for slot = 1, ATTACHMENTS_MAX_SEND or 16 do
+            local link = GetInboxItemLink and GetInboxItemLink(i, slot)
+            if link then
+                local id = self:LinkToID(link)
+                if id then
+                    -- GetInboxItem returns: name,itemID,texture,count,quality,canUse
+                    local _, _, _, count = GetInboxItem(i, slot)
+                    self.mailItems[id] = (self.mailItems[id] or 0) + (count or 1)
+                end
+            end
+        end
+    end
+
+    local n = self:CountKeys(self.mailItems)
+    print(string.format("|cff00ff96SmartCraft:|r Mailbox scanned — %d item type%s in mail.", n, n==1 and "" or "s"))
+end
+
+function Inv:ClearMail()
+    self.mailItems = {}
+end
+
+function Inv:MailCacheStatus()
+    local n = self:CountKeys(self.mailItems)
+    if n == 0 then return nil end
+    return string.format("|cffddaa00Mail: %d types|r", n)
+end
+
 function Inv:GetCount(itemID)
     local count = self.bagItems[itemID] or 0
     if SmartCraftDB and SmartCraftDB.includeBank then
         count = count + ((SmartCraftDB.bankCache or {})[itemID] or 0)
     end
+    count = count + (self.mailItems[itemID] or 0)
     return count
 end
 
@@ -44,6 +86,10 @@ function Inv:GetAllItems()
         for id, count in pairs(SmartCraftDB.bankCache or {}) do
             combined[id] = (combined[id] or 0) + count
         end
+    end
+    -- Include mail items
+    for id, count in pairs(self.mailItems) do
+        combined[id] = (combined[id] or 0) + count
     end
     return combined
 end
@@ -108,12 +154,20 @@ end
 function Inv:BankCacheStatus()
     local cache = SmartCraftDB and SmartCraftDB.bankCache or {}
     local n = self:CountKeys(cache)
+    local parts = {}
+
     if n == 0 then
-        return "|cffff9900Bank: visit to scan|r"
-    end
-    if SmartCraftDB and SmartCraftDB.includeBank then
-        return string.format("|cff00ff96Bank: ON (%d)|r", n)
+        table.insert(parts, "|cffff9900Bank: visit to scan|r")
+    elseif SmartCraftDB and SmartCraftDB.includeBank then
+        table.insert(parts, string.format("|cff00ff96Bank: ON (%d)|r", n))
     else
-        return string.format("|cffff4444Bank: OFF (%d)|r", n)
+        table.insert(parts, string.format("|cffff4444Bank: OFF (%d)|r", n))
     end
+
+    local mailN = self:CountKeys(self.mailItems)
+    if mailN > 0 then
+        table.insert(parts, string.format("|cffddaa00Mail: %d|r", mailN))
+    end
+
+    return table.concat(parts, "  ")
 end

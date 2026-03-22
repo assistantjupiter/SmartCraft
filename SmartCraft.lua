@@ -3,7 +3,7 @@
 -- Fully native, no external dependencies.
 
 SmartCraft = SmartCraft or {}
-SmartCraft.version = "0.5.2"
+SmartCraft.version = "0.5.3"
 
 SmartCraft.defaults = {
     includeBank = true,
@@ -21,6 +21,8 @@ eventFrame:RegisterEvent("MERCHANT_SHOW")
 eventFrame:RegisterEvent("MERCHANT_CLOSED")
 eventFrame:RegisterEvent("AUCTION_HOUSE_SHOW")
 eventFrame:RegisterEvent("AUCTION_HOUSE_CLOSED")
+eventFrame:RegisterEvent("MAIL_SHOW")
+eventFrame:RegisterEvent("MAIL_CLOSED")
 
 eventFrame:SetScript("OnEvent", function(self, event, ...)
     if     event == "ADDON_LOADED"     then SmartCraft:OnAddonLoaded(...)
@@ -32,6 +34,8 @@ eventFrame:SetScript("OnEvent", function(self, event, ...)
     elseif event == "MERCHANT_CLOSED"      then SmartCraft:OnMerchantClosed()
     elseif event == "AUCTION_HOUSE_SHOW"   then SmartCraft:OnAuctionShow()
     elseif event == "AUCTION_HOUSE_CLOSED" then SmartCraft:OnAuctionClosed()
+    elseif event == "MAIL_SHOW"            then SmartCraft:OnMailShow()
+    elseif event == "MAIL_CLOSED"          then SmartCraft:OnMailClosed()
     end
 end)
 
@@ -115,6 +119,26 @@ function SmartCraft:OnTradeSkillUpdate()
             SmartCraft.UI:Refresh()
         end
     end)
+end
+
+function SmartCraft:OnMailShow()
+    local elapsed = 0
+    local ticker = CreateFrame("Frame")
+    ticker:SetScript("OnUpdate", function(self, dt)
+        elapsed = elapsed + dt
+        if elapsed >= 0.5 then
+            self:SetScript("OnUpdate", nil)
+            SmartCraft.Inventory:ScanMail()
+            SmartCraft:RunAnalysis()
+            if SmartCraft.UI:IsShown() then SmartCraft.UI:Refresh() end
+        end
+    end)
+end
+
+function SmartCraft:OnMailClosed()
+    SmartCraft.Inventory:ClearMail()
+    SmartCraft:RunAnalysis()
+    if SmartCraft.UI:IsShown() then SmartCraft.UI:Refresh() end
 end
 
 function SmartCraft:OnAuctionShow()
