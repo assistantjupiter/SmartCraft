@@ -14,10 +14,10 @@ local skillLine, bankLine
 local tabs      = {}
 local activeTab = "crafts"
 
-local fsPool    = {}
-local btnPool   = {}
-local stratBtns = {}
-local plannerTargetBox, plannerGoBtn
+local fsPool        = {}
+local btnPool       = {}
+local stratBtns     = {}
+local plannerTargetBox, plannerGoBtn, plannerAddBtn
 
 -- ----------------------------------------------------------------
 -- Helpers
@@ -304,6 +304,7 @@ function UI:RebuildContent()
     -- Always hide planner widgets; they re-show themselves if on planner tab
     if plannerGoBtn     then plannerGoBtn:Hide() end
     if plannerTargetBox then plannerTargetBox:Hide() end
+    if plannerAddBtn    then plannerAddBtn:Hide() end
     -- Always hide strategy buttons; re-shown by optimize tab
     for _, b in ipairs(stratBtns) do b:Hide() end
 
@@ -324,6 +325,27 @@ function UI:RebuildContent()
         -- ── Strategy selector row (Optimize tab) ────────────────
         if line.isStrategyRow then
             yOff = self:RenderStrategyRow(yOff)
+
+        -- ── Planner "Add to Shopping" button row ─────────────────
+        elseif line.isPlannerAddBtn then
+            if not plannerAddBtn then
+                plannerAddBtn = CreateFrame("Button", "SCPlannerAddBtn", scrollChild, "UIPanelButtonTemplate")
+                plannerAddBtn:SetSize(160, 22)
+                plannerAddBtn:SetScript("OnClick", function()
+                    SmartCraft.ShoppingList:MergePlanner()
+                    UI:SwitchTab("shopping")
+                end)
+            end
+            plannerAddBtn:ClearAllPoints()
+            plannerAddBtn:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 6, yOff)
+            -- Label reflects current state
+            if SmartCraft.ShoppingList.plannerMerged then
+                plannerAddBtn:SetText("Planner added (refresh)")
+            else
+                plannerAddBtn:SetText("Add Route to Shopping List")
+            end
+            plannerAddBtn:Show()
+            yOff = yOff - (UC.LINE_H + 6)
 
         -- ── Planner inline input row ─────────────────────────────
         elseif line.isPlannerInput then
@@ -508,6 +530,13 @@ function UI:BuildShoppingLines()
 
     table.insert(lines, { text="Shopping List", isHeader=true, hex="ffd700" })
 
+    if SmartCraft.ShoppingList.plannerMerged then
+        table.insert(lines, {
+            text = "  Includes planner route mats",
+            r=0.5, g=0.8, b=1,
+        })
+    end
+
     local shopList = SmartCraft.ShoppingList.list
     if not shopList or #shopList == 0 then
         table.insert(lines, { text="  Nothing to buy!", r=0.4, g=1, b=0.6 })
@@ -576,6 +605,9 @@ function UI:BuildPlannerLines()
         table.insert(lines, { text=" ", r=1,g=1,b=1 })
         table.insert(lines, { text="Mats to Buy", isHeader=true, hex="ffd700" })
         for _, l in ipairs(PL:GetBuyLines()) do table.insert(lines, l) end
+        table.insert(lines, { text=" ", r=1,g=1,b=1 })
+        -- Add to Shopping button row
+        table.insert(lines, { isPlannerAddBtn = true })
         table.insert(lines, { text=" ", r=1,g=1,b=1 })
         table.insert(lines, { text="  Press Print to output plan to chat.", r=0.5,g=0.5,b=0.5 })
     end
