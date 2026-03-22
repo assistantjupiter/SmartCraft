@@ -47,6 +47,9 @@ function PL:BuildPlan(targetSkill)
     -- Track total mats needed across the whole plan
     local matTotals = {}   -- itemID → total count
 
+    -- Build a merged recipe pool: known recipes + trainer recipes in range
+    self.recipePool = self:BuildRecipePool(current, targetSkill)
+
     while simSkill < targetSkill do
         -- Find best recipe available at simSkill
         local best = self:BestRecipeAt(simSkill)
@@ -73,6 +76,21 @@ function PL:BuildPlan(targetSkill)
         local craftsHere = math.ceil(skillUpsHere * craftsMult)
         craftsHere = math.min(craftsHere, craftsForThis)
 
+        -- Trainer-only recipe: note it and advance skill by 1 (placeholder)
+        if best.isTrainerOnly then
+            table.insert(self.plan, {
+                recipe        = best,
+                craftsNeeded  = 0,
+                matsUsed      = {},
+                fromSkill     = simSkill,
+                toSkill       = simSkill,
+                isTrainerStep = true,
+            })
+            -- Skip past this skill point to avoid infinite loop
+            simSkill = simSkill + 1
+            goto continue
+        end
+
         -- Accumulate mats
         local matsUsed = {}
         for id, perCraft in pairs(best.reagents) do
@@ -88,6 +106,8 @@ function PL:BuildPlan(targetSkill)
             fromSkill    = simSkill,
             toSkill      = math.min(simSkill + skillUpsHere, targetSkill),
         })
+
+        ::continue::
 
         simSkill = simSkill + skillUpsHere
     end
@@ -108,27 +128,95 @@ function PL:BuildPlan(targetSkill)
     table.sort(self.buyList, function(a, b) return a.toBuy > b.toBuy end)
 end
 
--- Find the most efficient recipe for a given skill level
+-- ----------------------------------------------------------------
+-- Build merged recipe pool: known recipes + trainer recipes
+-- Trainer entries get synthetic recipe objects with skillReq set
+-- to their actual trainer-stated required skill level.
+-- ----------------------------------------------------------------
+function PL:BuildRecipePool(fromSkill, toSkill)
+    local pool = {}
+
+    -- Known recipes (already scanned)
+    for _, recipe in ipairs(SmartCraft.Recipes.list) do
+        if recipe.difficulty ~= "TRIVIAL" then
+            table.insert(pool, recipe)
+        end
+    end
+
+    -- Trainer recipes in the target range
+    local TDB = SmartCraft.TrainerDB
+    if TDB and #TDB.recipes > 0 then
+        for _, tr in ipairs(TDB:GetRecipesInRange(fromSkill, toSkill)) do
+            -- Check it's not already in known recipes
+            local known = false
+            for _, r in ipairs(SmartCraft.Recipes.list) do
+                if r.name == tr.name then known = true break end
+            end
+            if not known then
+                -- Synthetic recipe entry — no reagent data yet (not learned)
+                -- Mark as trainer-only so Planner can note "learn from trainer first"
+                table.insert(pool, {
+                    name       = tr.name,
+                    skillReq   = tr.reqSkill,
+                    difficulty = "OPTIMAL",   -- assume orange when first learned
+                    reagents   = {},           -- unknown until learned
+                    numMade    = 1,
+                    isTrainerOnly = true,
+                    trainerCost   = tr.moneyCost,
+                })
+            end
+        end
+    end
+
+    return pool
+end
+
+-- Find the most efficient recipe for a given skill level from the pool
 -- Priority: OPTIMAL > MEDIUM > EASY; tiebreak = fewest total reagent quantity
+-- Trainer-only recipes (no reagent data) are noted but skipped for mat planning
 function PL:BestRecipeAt(simSkill)
     local best, bestScore = nil, nil
     local priority = { OPTIMAL=1, MEDIUM=2, EASY=3 }
+    local pool = self.recipePool or SmartCraft.Recipes.list
 
-    for _, recipe in ipairs(SmartCraft.Recipes.list) do
-        if recipe.difficulty ~= "TRIVIAL" then
-            -- Check recipe is within craftable range at simSkill
-            local lo = recipe.skillReq - 5
-            local hi = self:GreyAt(recipe, simSkill)
-            if simSkill >= lo and simSkill < hi then
-                local p = priority[recipe.difficulty] or 99
-                local cost = self:TotalReagents(recipe)
-                local score = p * 1000 + cost
-                if not best or score < bestScore then
-                    best, bestScore = recipe, score
+    for _, recipe in ipairs(pool) do
+        if not recipe.isTrainerOnly then
+            -- Estimate difficulty at simSkill based on skillReq delta
+            local delta = simSkill - recipe.skillReq
+            local diff
+            if     delta < 10  then diff = "OPTIMAL"
+            elseif delta < 25  then diff = "MEDIUM"
+            elseif delta < 50  then diff = "EASY"
+            else                    diff = "TRIVIAL"
+            end
+
+            if diff ~= "TRIVIAL" then
+                local greyAt = recipe.skillReq + 50
+                if simSkill >= recipe.skillReq and simSkill < greyAt then
+                    local p = priority[diff] or 99
+                    local cost = self:TotalReagents(recipe)
+                    local score = p * 1000 + cost
+                    if not best or score < bestScore then
+                        best, bestScore = recipe, score
+                    end
                 end
             end
         end
     end
+
+    -- If no known recipe found, check if a trainer recipe unlocks soon
+    if not best then
+        local pool2 = self.recipePool or {}
+        for _, recipe in ipairs(pool2) do
+            if recipe.isTrainerOnly and recipe.skillReq <= simSkill + 5 then
+                -- Suggest learning from trainer
+                if not best or recipe.skillReq < best.skillReq then
+                    best = recipe
+                end
+            end
+        end
+    end
+
     return best
 end
 
@@ -166,13 +254,25 @@ function PL:GetPlanLines()
     local C = SmartCraft.Constants.DIFF_COLOR
 
     for _, step in ipairs(self.plan) do
-        local c = C[step.recipe.difficulty] or C.TRIVIAL
-        local text = string.format(
-            "  %d→%d  |cffffd700[%dx]|r %s",
-            step.fromSkill, step.toSkill,
-            step.craftsNeeded, step.recipe.name
-        )
-        table.insert(lines, { text=text, r=c.r, g=c.g, b=c.b })
+        if step.isTrainerStep then
+            local cost = step.recipe.trainerCost or 0
+            local costStr = cost > 0 and string.format(" (%dg %ds %dc)",
+                math.floor(cost/10000),
+                math.floor((cost%10000)/100),
+                cost%100) or ""
+            table.insert(lines, {
+                text = string.format("  sk.%d  [LEARN] %s%s", step.fromSkill, step.recipe.name, costStr),
+                r=0.5, g=0.8, b=1,
+            })
+        else
+            local c = C[step.recipe.difficulty] or C.TRIVIAL
+            local text = string.format(
+                "  %d→%d  |cffffd700[%dx]|r %s",
+                step.fromSkill, step.toSkill,
+                step.craftsNeeded, step.recipe.name
+            )
+            table.insert(lines, { text=text, r=c.r, g=c.g, b=c.b })
+        end
     end
 
     return lines

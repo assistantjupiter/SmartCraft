@@ -287,7 +287,10 @@ function UI:UpdateHeader()
     else
         skillLine:SetText("|cffaaaaaa-- open a profession window --|r")
     end
-    bankLine:SetText(SmartCraft.Inventory:BankCacheStatus())
+    local statusParts = { SmartCraft.Inventory:BankCacheStatus() }
+    local trainerStatus = SmartCraft.TrainerDB and SmartCraft.TrainerDB:StatusLine()
+    if trainerStatus then table.insert(statusParts, trainerStatus) end
+    bankLine:SetText(table.concat(statusParts, "  "))
 end
 
 -- ----------------------------------------------------------------
