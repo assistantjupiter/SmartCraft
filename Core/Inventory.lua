@@ -48,21 +48,43 @@ function Inv:GetAllItems()
     return combined
 end
 
+-- Anniversary (1.15.x) uses C_Container.* API.
+-- Fall back to legacy globals if C_Container doesn't exist (older clients).
+local function ContainerNumSlots(bag)
+    if C_Container and C_Container.GetContainerNumSlots then
+        return C_Container.GetContainerNumSlots(bag)
+    end
+    return GetContainerNumSlots(bag)
+end
+
+local function ContainerItemLink(bag, slot)
+    if C_Container and C_Container.GetContainerItemLink then
+        return C_Container.GetContainerItemLink(bag, slot)
+    end
+    return GetContainerItemLink and GetContainerItemLink(bag, slot)
+end
+
+local function ContainerItemCount(bag, slot)
+    if C_Container and C_Container.GetContainerItemInfo then
+        local info = C_Container.GetContainerItemInfo(bag, slot)
+        return info and info.stackCount or 1
+    end
+    local _, count = GetContainerItemInfo(bag, slot)
+    return count or 1
+end
+
 function Inv:ScanContainers(list)
     local items = {}
     for _, bag in ipairs(list) do
-        local slots = GetContainerNumSlots(bag)
+        local slots = ContainerNumSlots(bag)
         if slots and slots > 0 then
             for slot = 1, slots do
-                -- Vanilla/Anniversary GetContainerItemInfo returns:
-                -- texture, count, locked, quality, readable, lootable, link
-                -- (same order as TBC but we use GetContainerItemLink for safety)
-                local link = GetContainerItemLink(bag, slot)
+                local link = ContainerItemLink(bag, slot)
                 if link then
                     local id = self:LinkToID(link)
                     if id then
-                        local _, count = GetContainerItemInfo(bag, slot)
-                        items[id] = (items[id] or 0) + (count or 1)
+                        local count = ContainerItemCount(bag, slot)
+                        items[id] = (items[id] or 0) + count
                     end
                 end
             end

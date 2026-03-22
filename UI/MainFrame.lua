@@ -36,11 +36,19 @@ function UI:Init()
     if frame then return end
 
     -- ── Main window ─────────────────────────────────────────────
-    frame = CreateFrame("Frame", "SmartCraftMainFrame", UIParent)
+    frame = CreateFrame("Frame", "SmartCraftMainFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
     frame:SetSize(W, H)
     frame:SetPoint("CENTER")
-    frame:SetBackdrop(BACKDROP)
-    frame:SetBackdropColor(0, 0, 0, 1)
+    -- SetBackdrop requires BackdropTemplateMixin in Anniversary/Shadowlands+
+    if frame.SetBackdrop then
+        frame:SetBackdrop(BACKDROP)
+        frame:SetBackdropColor(0, 0, 0, 1)
+    else
+        -- Fallback: plain dark background texture
+        local bg = frame:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints(frame)
+        bg:SetColorTexture(0.05, 0.05, 0.05, 0.95)
+    end
     frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
