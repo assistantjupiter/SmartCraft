@@ -1,7 +1,7 @@
 -- MainFrame.lua
--- Fully native WoW frame — vanilla Classic / Anniversary compatible.
--- Avoids all Dragonflight/TBC-only frame templates.
--- Uses SetBackdrop + manual title/close for maximum compatibility.
+-- Polished WoW-style UI — Anniversary / vanilla Classic compatible.
+-- Uses standard WoW dialog artwork for a native look.
+-- No emoji (they render as boxes in WoW's font engine).
 
 SmartCraft.UI = {}
 local UI = SmartCraft.UI
@@ -16,39 +16,40 @@ local activeTab = "crafts"
 
 local fsPool  = {}
 local btnPool = {}
-
 local plannerTargetBox, plannerGoBtn
 
--- Standard vanilla backdrop
-local BACKDROP = {
-    bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
-    edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
-    tile     = true,
-    tileSize = 32,
-    edgeSize = 32,
-    insets   = { left=11, right=12, top=12, bottom=11 },
-}
+-- ----------------------------------------------------------------
+-- Helpers
+-- ----------------------------------------------------------------
+local function MakeTexture(parent, layer, file, w, h, x, y, anchor)
+    local t = parent:CreateTexture(nil, layer or "ARTWORK")
+    if file  then t:SetTexture(file) end
+    if w and h then t:SetSize(w, h) end
+    if anchor then t:SetPoint(anchor, parent, anchor, x or 0, y or 0) end
+    return t
+end
+
+-- Solid coloured rectangle (used for tab highlight, dividers, etc.)
+local function MakeColorBox(parent, layer, r, g, b, a, w, h, point, relPoint, ox, oy)
+    local t = parent:CreateTexture(nil, layer or "OVERLAY")
+    t:SetColorTexture(r, g, b, a or 1)
+    if w and h then t:SetSize(w, h) end
+    if point then t:SetPoint(point, parent, relPoint or point, ox or 0, oy or 0) end
+    return t
+end
 
 -- ----------------------------------------------------------------
--- Build the static frame skeleton (called once)
+-- Build frame (once)
 -- ----------------------------------------------------------------
 function UI:Init()
     if frame then return end
 
-    -- ── Main window ─────────────────────────────────────────────
-    frame = CreateFrame("Frame", "SmartCraftMainFrame", UIParent, BackdropTemplateMixin and "BackdropTemplate" or nil)
+    -- ── Outer frame ─────────────────────────────────────────────
+    -- Use BackdropTemplate if available (Anniversary); fallback to manual bg
+    local tmpl = BackdropTemplateMixin and "BackdropTemplate" or nil
+    frame = CreateFrame("Frame", "SmartCraftMainFrame", UIParent, tmpl)
     frame:SetSize(W, H)
     frame:SetPoint("CENTER")
-    -- SetBackdrop requires BackdropTemplateMixin in Anniversary/Shadowlands+
-    if frame.SetBackdrop then
-        frame:SetBackdrop(BACKDROP)
-        frame:SetBackdropColor(0, 0, 0, 1)
-    else
-        -- Fallback: plain dark background texture
-        local bg = frame:CreateTexture(nil, "BACKGROUND")
-        bg:SetAllPoints(frame)
-        bg:SetColorTexture(0.05, 0.05, 0.05, 0.95)
-    end
     frame:SetMovable(true)
     frame:EnableMouse(true)
     frame:RegisterForDrag("LeftButton")
@@ -58,33 +59,70 @@ function UI:Init()
     frame:SetFrameStrata("HIGH")
     frame:Hide()
 
-    -- ── Title bar ───────────────────────────────────────────────
-    local titleBg = frame:CreateTexture(nil, "OVERLAY")
-    titleBg:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
-    titleBg:SetWidth(300)
-    titleBg:SetHeight(64)
-    titleBg:SetPoint("TOP", frame, "TOP", 0, 12)
+    -- Background — solid dark panel
+    if frame.SetBackdrop then
+        frame:SetBackdrop({
+            bgFile   = "Interface\\DialogFrame\\UI-DialogBox-Background",
+            edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Border",
+            tile     = true, tileSize = 32, edgeSize = 26,
+            insets   = { left=9, right=9, top=9, bottom=9 },
+        })
+        frame:SetBackdropColor(0.05, 0.05, 0.08, 1)
+        frame:SetBackdropBorderColor(0.4, 0.4, 0.5, 1)
+    else
+        -- Hard fallback: manual textures
+        local bg = frame:CreateTexture(nil, "BACKGROUND")
+        bg:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Background")
+        bg:SetAllPoints(frame)
+        local edge = frame:CreateTexture(nil, "BORDER")
+        edge:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Border")
+        edge:SetAllPoints(frame)
+    end
 
-    local titleText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-    titleText:SetPoint("TOP", frame, "TOP", 0, -2)
-    titleText:SetText("|cff00ff96⚒|r SmartCraft")
+    -- ── Header bar ──────────────────────────────────────────────
+    local headerBg = frame:CreateTexture(nil, "ARTWORK")
+    headerBg:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Background-Dark")
+    headerBg:SetPoint("TOPLEFT",  frame, "TOPLEFT",  9,  -9)
+    headerBg:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -9, -9)
+    headerBg:SetHeight(36)
+
+    -- Bottom edge of header
+    local headerLine = frame:CreateTexture(nil, "OVERLAY")
+    headerLine:SetTexture("Interface\\Tooltips\\UI-Tooltip-Border")
+    headerLine:SetColorTexture(0.3, 0.3, 0.4, 0.8)
+    headerLine:SetPoint("TOPLEFT",  frame, "TOPLEFT",  9, -45)
+    headerLine:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -9, -45)
+    headerLine:SetHeight(1)
+
+    -- Title text
+    local titleText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+    titleText:SetPoint("TOP", frame, "TOP", 0, -16)
+    titleText:SetText("SmartCraft")
+    titleText:SetTextColor(1, 0.82, 0)
 
     -- ── Close button ─────────────────────────────────────────────
     local closeBtn = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
+    closeBtn:SetSize(26, 26)
     closeBtn:SetPoint("TOPRIGHT", frame, "TOPRIGHT", 2, 2)
     closeBtn:SetScript("OnClick", function() frame:Hide() end)
 
-    -- ── Status row ───────────────────────────────────────────────
+    -- ── Skill / bank status ───────────────────────────────────────
     skillLine = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    skillLine:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -20)
-    skillLine:SetText("")
+    skillLine:SetPoint("TOPLEFT", frame, "TOPLEFT", 16, -34)
+    skillLine:SetText("|cffaaaaaa-- open a profession window --|r")
 
     bankLine = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    bankLine:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -28, -20)
+    bankLine:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -32, -34)
     bankLine:SetJustifyH("RIGHT")
     bankLine:SetText("")
 
-    -- ── Tab buttons ──────────────────────────────────────────────
+    -- ── Tab bar ───────────────────────────────────────────────────
+    local tabBarBg = frame:CreateTexture(nil, "ARTWORK")
+    tabBarBg:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Background-Dark")
+    tabBarBg:SetPoint("TOPLEFT",  frame, "TOPLEFT",  9,  -46)
+    tabBarBg:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -9, -46)
+    tabBarBg:SetHeight(UC.TAB_H + 2)
+
     local tabDefs = {
         { key="crafts",   label="Crafts"   },
         { key="shopping", label="Shopping" },
@@ -92,17 +130,57 @@ function UI:Init()
     }
     local tx = 14
     for _, def in ipairs(tabDefs) do
-        local btn = CreateFrame("Button", "SCTab_"..def.key, frame, "UIPanelButtonTemplate")
-        btn:SetSize(86, UC.TAB_H)
-        btn:SetPoint("TOPLEFT", frame, "TOPLEFT", tx, -UC.HEADER_H)
-        btn:SetText(def.label)
+        local tbtn = CreateFrame("Button", "SCTab_"..def.key, frame)
+        tbtn:SetSize(86, UC.TAB_H)
+        tbtn:SetPoint("TOPLEFT", frame, "TOPLEFT", tx, -(UC.HEADER_H + 2))
+
+        -- tab background
+        local tabBg = tbtn:CreateTexture(nil, "BACKGROUND")
+        tabBg:SetAllPoints(tbtn)
+        tabBg:SetColorTexture(0.15, 0.15, 0.2, 0.9)
+        tbtn.bg = tabBg
+
+        -- active highlight bar (bottom)
+        local tabLine = tbtn:CreateTexture(nil, "OVERLAY")
+        tabLine:SetColorTexture(1, 0.75, 0, 1)
+        tabLine:SetPoint("BOTTOMLEFT",  tbtn, "BOTTOMLEFT",  0, 0)
+        tabLine:SetPoint("BOTTOMRIGHT", tbtn, "BOTTOMRIGHT", 0, 0)
+        tabLine:SetHeight(2)
+        tabLine:Hide()
+        tbtn.activeLine = tabLine
+
+        local tabLabel = tbtn:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        tabLabel:SetAllPoints(tbtn)
+        tabLabel:SetJustifyH("CENTER")
+        tabLabel:SetText(def.label)
+        tabLabel:SetTextColor(0.8, 0.8, 0.8)
+        tbtn.label = tabLabel
+
         local key = def.key
-        btn:SetScript("OnClick", function() UI:SwitchTab(key) end)
-        tabs[def.key] = btn
+        tbtn:SetScript("OnClick", function() UI:SwitchTab(key) end)
+        tbtn:SetScript("OnEnter", function(self)
+            if activeTab ~= key then
+                self.label:SetTextColor(1, 1, 1)
+            end
+        end)
+        tbtn:SetScript("OnLeave", function(self)
+            if activeTab ~= key then
+                self.label:SetTextColor(0.8, 0.8, 0.8)
+            end
+        end)
+
+        tabs[def.key] = tbtn
         tx = tx + 90
     end
 
-    -- ── Scroll area ──────────────────────────────────────────────
+    -- ── Divider below tabs ────────────────────────────────────────
+    local divider = frame:CreateTexture(nil, "OVERLAY")
+    divider:SetColorTexture(0.25, 0.25, 0.35, 1)
+    divider:SetPoint("TOPLEFT",  frame, "TOPLEFT",  9,  -(UC.HEADER_H + UC.TAB_H + 4))
+    divider:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -9, -(UC.HEADER_H + UC.TAB_H + 4))
+    divider:SetHeight(1)
+
+    -- ── Scroll area ───────────────────────────────────────────────
     local scrollTop = UC.HEADER_H + UC.TAB_H + 6
     scrollFrame = CreateFrame("ScrollFrame", "SmartCraftScroll", frame, "UIPanelScrollFrameTemplate")
     scrollFrame:SetPoint("TOPLEFT",     frame, "TOPLEFT",     14,          -scrollTop)
@@ -113,21 +191,29 @@ function UI:Init()
     scrollChild:SetHeight(1)
     scrollFrame:SetScrollChild(scrollChild)
 
-    -- ── Footer ───────────────────────────────────────────────────
-    local refreshBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    refreshBtn:SetSize(68, 20)
-    refreshBtn:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 14, 14)
-    refreshBtn:SetText("Refresh")
-    refreshBtn:SetScript("OnClick", function()
+    -- ── Footer divider ────────────────────────────────────────────
+    local footerLine = frame:CreateTexture(nil, "OVERLAY")
+    footerLine:SetColorTexture(0.25, 0.25, 0.35, 1)
+    footerLine:SetPoint("BOTTOMLEFT",  frame, "BOTTOMLEFT",   9, UC.FOOTER_H - 1)
+    footerLine:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -9, UC.FOOTER_H - 1)
+    footerLine:SetHeight(1)
+
+    -- ── Footer buttons ────────────────────────────────────────────
+    local function MakeFooterBtn(label, xLeft, onClick)
+        local b = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+        b:SetSize(80, 22)
+        b:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", xLeft, 8)
+        b:SetText(label)
+        b:SetScript("OnClick", onClick)
+        return b
+    end
+
+    MakeFooterBtn("Refresh", 14, function()
         SmartCraft:RunAnalysis()
         UI:Refresh()
     end)
 
-    local bankToggle = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    bankToggle:SetSize(100, 20)
-    bankToggle:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 88, 14)
-    bankToggle:SetText("Toggle Bank")
-    bankToggle:SetScript("OnClick", function()
+    MakeFooterBtn("Bank: ON", 100, function()
         if SmartCraftDB then
             SmartCraftDB.includeBank = not SmartCraftDB.includeBank
         end
@@ -136,18 +222,20 @@ function UI:Init()
     end)
 
     local printBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
-    printBtn:SetSize(70, 20)
-    printBtn:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -14, 14)
+    printBtn:SetSize(70, 22)
+    printBtn:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -12, 8)
     printBtn:SetText("Print")
     printBtn:SetScript("OnClick", function()
         if activeTab == "shopping" then
             SmartCraft.ShoppingList:PrintToChat()
         elseif activeTab == "planner" then
             SmartCraft.Planner:PrintToChat()
+        else
+            print("|cff00ff96SmartCraft:|r Open Shopping or Planner tab to print.")
         end
     end)
 
-    -- ── Planner controls ─────────────────────────────────────────
+    -- ── Planner input ─────────────────────────────────────────────
     plannerGoBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     plannerGoBtn:SetSize(52, 22)
     plannerGoBtn:SetPoint("TOPRIGHT", scrollFrame, "TOPRIGHT", 0, 26)
@@ -169,17 +257,16 @@ function UI:Init()
     plannerTargetBox:SetAutoFocus(false)
     plannerTargetBox:SetNumeric(true)
     plannerTargetBox:SetMaxLetters(3)
-    plannerTargetBox:SetScript("OnEnterPressed", function()
-        plannerGoBtn:Click()
-    end)
-    plannerTargetBox:SetScript("OnEscapePressed", function(self)
-        self:ClearFocus()
-    end)
+    plannerTargetBox:SetScript("OnEnterPressed", function() plannerGoBtn:Click() end)
+    plannerTargetBox:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     plannerTargetBox:Hide()
 
     self.frame       = frame
     self.scrollChild = scrollChild
     self.scrollFrame = scrollFrame
+
+    -- Activate default tab
+    UI:SwitchTab("crafts")
 end
 
 -- ----------------------------------------------------------------
@@ -187,8 +274,16 @@ end
 -- ----------------------------------------------------------------
 function UI:SwitchTab(key)
     activeTab = key
-    for k, btn in pairs(tabs) do
-        btn:SetAlpha(k == key and 1.0 or 0.5)
+    for k, tbtn in pairs(tabs) do
+        local active = (k == key)
+        tbtn.activeLine:SetShown(active)
+        if active then
+            tbtn.bg:SetColorTexture(0.2, 0.2, 0.3, 1)
+            tbtn.label:SetTextColor(1, 0.82, 0)
+        else
+            tbtn.bg:SetColorTexture(0.1, 0.1, 0.15, 0.9)
+            tbtn.label:SetTextColor(0.7, 0.7, 0.7)
+        end
     end
     local isPlanner = (key == "planner")
     if plannerTargetBox then plannerTargetBox:SetShown(isPlanner) end
@@ -212,12 +307,14 @@ function UI:UpdateHeader()
             "|cffffd700%s|r  |cffaaaaaa%d / %d|r",
             R.skillName, R.skillLevel, R.maxSkill
         ))
+    else
+        skillLine:SetText("|cffaaaaaa-- open a profession window --|r")
     end
     bankLine:SetText(SmartCraft.Inventory:BankCacheStatus())
 end
 
 -- ----------------------------------------------------------------
--- Rebuild scrollable content
+-- Rebuild content
 -- ----------------------------------------------------------------
 function UI:RebuildContent()
     for _, fs  in ipairs(fsPool)  do fs:SetText("") ; fs:Hide() end
@@ -230,43 +327,62 @@ function UI:RebuildContent()
     end
 
     local LH   = UC.LINE_H
-    local yOff = -4
+    local yOff = -6
 
     for i, line in ipairs(lines) do
-        local fs = fsPool[i]
-        if not fs then
-            fs = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-            fs:SetJustifyH("LEFT")
-            fsPool[i] = fs
-        end
-        fs:ClearAllPoints()
-        fs:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 4, yOff)
-        local lineWidth = scrollChild:GetWidth() - (line.hasCraftBtn and 64 or 4)
-        fs:SetWidth(lineWidth)
-        fs:SetText(line.text or "")
-        fs:SetTextColor(line.r or 1, line.g or 1, line.b or 1)
-        fs:Show()
-
-        if line.hasCraftBtn and line.recipeIdx then
-            local bi  = line.btnPoolIdx
-            local btn = btnPool[bi]
-            if not btn then
-                btn = CreateFrame("Button", "SCCraftBtn"..bi, scrollChild, "UIPanelButtonTemplate")
-                btn:SetSize(56, LH + 2)
-                btnPool[bi] = btn
+        -- Section header style
+        if line.isHeader then
+            -- Coloured background bar for section headers
+            local hdr = fsPool["hdr"..i]
+            if not hdr then
+                hdr = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+                hdr:SetJustifyH("LEFT")
+                fsPool["hdr"..i] = hdr
             end
-            btn:ClearAllPoints()
-            btn:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", -4, yOff)
-            local idx, times = line.recipeIdx, line.maxCrafts
-            btn:SetScript("OnClick", function() UI:DoCraft(idx, times) end)
-            btn:SetText("Craft")
-            btn:Show()
-        end
+            hdr:ClearAllPoints()
+            hdr:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 6, yOff)
+            hdr:SetWidth(scrollChild:GetWidth() - 10)
+            hdr:SetText("|cff" .. (line.hex or "aaaaff") .. line.text .. "|r")
+            hdr:SetTextColor(1, 1, 1)
+            hdr:Show()
+            fsPool[i] = hdr   -- also index by number for cleanup
+            yOff = yOff - (LH + 2)
+        else
+            local fs = fsPool[i]
+            if not fs then
+                fs = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+                fs:SetJustifyH("LEFT")
+                fsPool[i] = fs
+            end
+            fs:ClearAllPoints()
+            fs:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 6, yOff)
+            local lineW = scrollChild:GetWidth() - (line.hasCraftBtn and 68 or 8)
+            fs:SetWidth(lineW)
+            fs:SetText(line.text or "")
+            fs:SetTextColor(line.r or 1, line.g or 1, line.b or 1)
+            fs:Show()
 
-        yOff = yOff - LH
+            if line.hasCraftBtn and line.recipeIdx then
+                local bi  = line.btnPoolIdx
+                local btn = btnPool[bi]
+                if not btn then
+                    btn = CreateFrame("Button", "SCCraftBtn"..bi, scrollChild, "UIPanelButtonTemplate")
+                    btn:SetSize(60, LH + 2)
+                    btnPool[bi] = btn
+                end
+                btn:ClearAllPoints()
+                btn:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", -4, yOff)
+                local idx, times = line.recipeIdx, line.maxCrafts
+                btn:SetScript("OnClick", function() UI:DoCraft(idx, times) end)
+                btn:SetText("Craft")
+                btn:Show()
+            end
+
+            yOff = yOff - LH
+        end
     end
 
-    scrollChild:SetHeight(math.max(math.abs(yOff) + 4, 1))
+    scrollChild:SetHeight(math.max(math.abs(yOff) + 6, 1))
     scrollFrame:SetVerticalScroll(0)
 end
 
@@ -277,8 +393,8 @@ function UI:DoCraft(recipeIdx, times)
     if not recipeIdx then return end
     TradeSkillFrame_SetSelection(recipeIdx)
     DoTradeSkill(recipeIdx, times)
-    local ticker = CreateFrame("Frame")
     local elapsed = 0
+    local ticker  = CreateFrame("Frame")
     ticker:SetScript("OnUpdate", function(self, dt)
         elapsed = elapsed + dt
         if elapsed >= 0.4 then
@@ -296,17 +412,17 @@ function UI:BuildCraftLines()
     local lines  = {}
     local btnIdx = 0
 
-    table.insert(lines, { text="── Safe to Craft ──", r=0.4, g=1, b=0.6 })
+    table.insert(lines, { text="Safe to Craft", isHeader=true, hex="66ff99" })
 
     local sug = SmartCraft.Reservation.suggestions
     if not sug or #sug == 0 then
-        table.insert(lines, { text="  No crafts available with current mats.", r=0.6, g=0.6, b=0.6 })
+        table.insert(lines, { text="  No crafts available with current mats.", r=0.5, g=0.5, b=0.5 })
     else
         for _, s in ipairs(sug) do
             local c = SmartCraft.Constants.DIFF_COLOR[s.recipe.difficulty]
             btnIdx = btnIdx + 1
             table.insert(lines, {
-                text        = string.format("  [%dx] %s", s.maxCrafts, s.recipe.name),
+                text        = string.format("  [%dx]  %s", s.maxCrafts, s.recipe.name),
                 r=c.r, g=c.g, b=c.b,
                 hasCraftBtn = true,
                 recipeIdx   = s.recipe.index,
@@ -316,61 +432,81 @@ function UI:BuildCraftLines()
         end
     end
 
-    table.insert(lines, { text=" ", r=1, g=1, b=1 })
-
-    for _, l in ipairs(SmartCraft.Suggestion:GetReservedLines()) do
-        table.insert(lines, l)
+    local resLines = SmartCraft.Suggestion:GetReservedLines()
+    if #resLines > 0 then
+        table.insert(lines, { text=" ", r=1, g=1, b=1 })
+        table.insert(lines, { text="Reserved Mats", isHeader=true, hex="88bbff" })
+        for _, l in ipairs(resLines) do
+            if not l.text:find("Reserved Mats") then
+                table.insert(lines, l)
+            end
+        end
     end
+
     return lines
 end
 
 function UI:BuildShoppingLines()
     local lines = {}
+
+    table.insert(lines, { text="Shopping List", isHeader=true, hex="ffd700" })
     for _, l in ipairs(SmartCraft.ShoppingList:GetLines()) do
-        table.insert(lines, l)
+        -- skip the "Shopping List" header line from module (we drew our own)
+        if not l.text:find("Shopping List") then
+            table.insert(lines, l)
+        end
     end
+
     local gaps = SmartCraft.Reservation.gaps
     if gaps and #gaps > 0 then
         table.insert(lines, { text=" ", r=1,g=1,b=1 })
-        table.insert(lines, { text="── Breakdown by Recipe ──", r=0.7,g=0.7,b=1 })
+        table.insert(lines, { text="Breakdown by Recipe", isHeader=true, hex="aaaaff" })
         for _, gap in ipairs(gaps) do
             table.insert(lines, { text="  "..gap.recipe.name..":", r=1, g=0.85, b=0.3 })
             for id, count in pairs(gap.short) do
                 local name = SmartCraft.ItemCache:Get(id)
                 table.insert(lines, {
                     text = string.format("    need %dx %s", count, name),
-                    r=0.9, g=0.5, b=0.5,
+                    r=0.85, g=0.45, b=0.45,
                 })
             end
         end
     end
+
     table.insert(lines, { text=" ", r=1,g=1,b=1 })
-    table.insert(lines, { text="|cff888888Press Print to output list to chat|r", r=0.6,g=0.6,b=0.6 })
+    table.insert(lines, { text="  Press Print to output list to chat.", r=0.5, g=0.5, b=0.5 })
     return lines
 end
 
 function UI:BuildPlannerLines()
     local lines = {}
     local PL = SmartCraft.Planner
+
+    table.insert(lines, { text="Skill Route Planner", isHeader=true, hex="66ff99" })
+
     if PL.targetSkill == 0 and #PL.plan == 0 then
-        table.insert(lines, { text="Enter a target skill and press Plan.", r=0.6,g=0.6,b=0.6 })
+        table.insert(lines, { text="  Enter a target skill level and press Plan.", r=0.6,g=0.6,b=0.6 })
         table.insert(lines, { text=" ", r=1,g=1,b=1 })
         table.insert(lines, {
-            text = string.format("|cffaaaaaa Current: %d / %d|r",
+            text = string.format("  Current skill:  %d / %d",
                 SmartCraft.Recipes.skillLevel, SmartCraft.Recipes.maxSkill),
             r=0.7, g=0.7, b=0.7,
         })
         return lines
     end
-    table.insert(lines, {
-        text = string.format("── Route to Skill %d ──", PL.targetSkill),
-        r=0.4, g=1, b=0.6,
-    })
+
+    if PL.errorMsg then
+        table.insert(lines, { text="  "..PL.errorMsg, r=1, g=0.3, b=0.3 })
+    end
+
     for _, l in ipairs(PL:GetPlanLines())  do table.insert(lines, l) end
+
     table.insert(lines, { text=" ", r=1,g=1,b=1 })
+    table.insert(lines, { text="Mats to Buy", isHeader=true, hex="ffd700" })
     for _, l in ipairs(PL:GetBuyLines())   do table.insert(lines, l) end
+
     table.insert(lines, { text=" ", r=1,g=1,b=1 })
-    table.insert(lines, { text="|cff888888Press Print to output plan to chat|r", r=0.6,g=0.6,b=0.6 })
+    table.insert(lines, { text="  Press Print to output plan to chat.", r=0.5,g=0.5,b=0.5 })
     return lines
 end
 
