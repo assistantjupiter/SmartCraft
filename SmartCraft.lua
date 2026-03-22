@@ -3,7 +3,7 @@
 -- Fully native, no external dependencies.
 
 SmartCraft = SmartCraft or {}
-SmartCraft.version = "0.3.8"
+SmartCraft.version = "0.3.9"
 
 SmartCraft.defaults = {
     includeBank = true,

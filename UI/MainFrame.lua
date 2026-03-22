@@ -127,7 +127,7 @@ function UI:Init()
         { key="crafts",   label="Crafts"   },
         { key="shopping", label="Shopping" },
         { key="planner",  label="Planner"  },
-        { key="help",     label="?"        },
+        { key="help",     label="Guide"    },
     }
     local tx = 14
     for _, def in ipairs(tabDefs) do
