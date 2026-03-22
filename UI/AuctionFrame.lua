@@ -19,6 +19,62 @@ local W, H = 280, 400
 function AF:OnAuctionShow()
     SmartCraft:RunAnalysis()
     self:Show()
+    self:StartBagWatch()
+end
+
+-- ----------------------------------------------------------------
+-- Called on AUCTION_HOUSE_CLOSED
+-- ----------------------------------------------------------------
+function AF:OnAuctionClosed()
+    self:StopBagWatch()
+    self:Hide()
+end
+
+-- ----------------------------------------------------------------
+-- BAG_UPDATE watcher — re-scans when items land in bags
+-- Debounced: waits 0.5s after last update to avoid rapid rebuilds
+-- ----------------------------------------------------------------
+AF._bagWatcher   = nil
+AF._bagDebounce  = nil
+AF._bagDebounceT = 0
+
+function AF:StartBagWatch()
+    if self._bagWatcher then return end  -- already watching
+
+    local watcher = CreateFrame("Frame")
+    watcher:RegisterEvent("BAG_UPDATE")
+    watcher:SetScript("OnEvent", function(self, event)
+        -- Start/reset debounce timer
+        AF._bagDebounceT = 0
+        if not AF._bagDebounce then
+            AF._bagDebounce = CreateFrame("Frame")
+            AF._bagDebounce:SetScript("OnUpdate", function(_, dt)
+                AF._bagDebounceT = AF._bagDebounceT + dt
+                if AF._bagDebounceT >= 0.5 then
+                    AF._bagDebounce:SetScript("OnUpdate", nil)
+                    AF._bagDebounce = nil
+                    -- Re-scan bags and rebuild shopping list
+                    SmartCraft.Inventory:ScanBags()
+                    SmartCraft.Reservation:Run()
+                    SmartCraft.ShoppingList:Build()
+                    AF:Rebuild()
+                end
+            end)
+        end
+    end)
+    self._bagWatcher = watcher
+end
+
+function AF:StopBagWatch()
+    if self._bagWatcher then
+        self._bagWatcher:UnregisterAllEvents()
+        self._bagWatcher:SetScript("OnEvent", nil)
+        self._bagWatcher = nil
+    end
+    if self._bagDebounce then
+        self._bagDebounce:SetScript("OnUpdate", nil)
+        self._bagDebounce = nil
+    end
 end
 
 -- ----------------------------------------------------------------

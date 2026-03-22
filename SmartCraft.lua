@@ -3,7 +3,7 @@
 -- Fully native, no external dependencies.
 
 SmartCraft = SmartCraft or {}
-SmartCraft.version = "0.5.1"
+SmartCraft.version = "0.5.2"
 
 SmartCraft.defaults = {
     includeBank = true,
@@ -131,7 +131,7 @@ function SmartCraft:OnAuctionShow()
 end
 
 function SmartCraft:OnAuctionClosed()
-    SmartCraft.AuctionFrame:Hide()
+    SmartCraft.AuctionFrame:OnAuctionClosed()
 end
 
 function SmartCraft:OnMerchantShow()
