@@ -164,6 +164,23 @@ function VF:Init()
 end
 
 -- ----------------------------------------------------------------
+-- Format a copper value as "Xg Ys Zc" with WoW color codes
+-- ----------------------------------------------------------------
+function VF:FormatMoney(copper)
+    if not copper or copper <= 0 then return "|cffaaaaaa0c|r" end
+    local g = math.floor(copper / 10000)
+    local s = math.floor((copper % 10000) / 100)
+    local c = copper % 100
+    local parts = {}
+    if g > 0 then table.insert(parts, string.format("|cffffd700%dg|r", g)) end
+    if s > 0 then table.insert(parts, string.format("|cffaaaaaa%ds|r", s)) end
+    if c > 0 or #parts == 0 then
+        table.insert(parts, string.format("|cffb87333%dc|r", c))
+    end
+    return table.concat(parts, " ")
+end
+
+-- ----------------------------------------------------------------
 -- Render the match list
 -- ----------------------------------------------------------------
 function VF:Rebuild()
@@ -202,25 +219,16 @@ function VF:Rebuild()
         fs:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 4, yOff)
         fs:SetWidth(scrollChild:GetWidth() - 72)
 
-        -- Format price
-        local priceStr = ""
-        if match.price and match.price > 0 then
-            local gold   = math.floor(match.price / 10000)
-            local silver = math.floor((match.price % 10000) / 100)
-            local copper = match.price % 100
-            if gold > 0 then
-                priceStr = string.format(" |cffffd700%dg|r", gold)
-            elseif silver > 0 then
-                priceStr = string.format(" |cffaaaaaa%ds|r", silver)
-            else
-                priceStr = string.format(" |cffb87333%dc|r", copper)
-            end
-            priceStr = priceStr .. " ea"
+        -- Format per-item cost (price × toBuy)
+        local totalCopper = (match.price or 0) * match.toBuy
+        local costStr = ""
+        if totalCopper > 0 then
+            costStr = "  Cost: " .. VF:FormatMoney(totalCopper)
         end
 
         fs:SetText(string.format(
             "|cffffd700%s|r\n  Need %d  Have %d%s",
-            match.name, match.toBuy, match.have, priceStr
+            match.name, match.toBuy, match.have, costStr
         ))
         fs:SetTextColor(0.9, 0.9, 0.9)
         fs:Show()
@@ -243,6 +251,44 @@ function VF:Rebuild()
         btn:Show()
 
         yOff = yOff - (LH * 2 + 8)
+    end
+
+    -- Grand total line
+    local grandTotal = 0
+    for _, match in ipairs(self.matches) do
+        grandTotal = grandTotal + ((match.price or 0) * match.toBuy)
+    end
+
+    if grandTotal > 0 then
+        -- divider
+        local divKey = "total_div"
+        local divTex = fsPool[divKey]
+        if not divTex then
+            -- use a FontString as a thin rule (simpler than texture in scrollchild)
+            divTex = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            fsPool[divKey] = divTex
+        end
+        divTex:ClearAllPoints()
+        divTex:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 4, yOff)
+        divTex:SetWidth(scrollChild:GetWidth() - 8)
+        divTex:SetText("|cff555566——————————————————|r")
+        divTex:Show()
+        yOff = yOff - LH
+
+        local totalKey = "total_fs"
+        local totalFs = fsPool[totalKey]
+        if not totalFs then
+            totalFs = scrollChild:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            totalFs:SetJustifyH("LEFT")
+            fsPool[totalKey] = totalFs
+        end
+        totalFs:ClearAllPoints()
+        totalFs:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 4, yOff)
+        totalFs:SetWidth(scrollChild:GetWidth() - 8)
+        totalFs:SetText("Total:  " .. VF:FormatMoney(grandTotal))
+        totalFs:SetTextColor(1, 0.82, 0)
+        totalFs:Show()
+        yOff = yOff - LH
     end
 
     scrollChild:SetHeight(math.max(math.abs(yOff) + 4, 1))

@@ -2,7 +2,7 @@
 ## Title: SmartCraft
 ## Notes: Inventory-aware profession leveling optimizer. Reserves mats for higher-skill recipes first.
 ## Author: SmartCraft Team
-## Version: 0.4.3
+## Version: 0.4.4
 ## DefaultState: enabled
 ## SavedVariables: SmartCraftDB
 
